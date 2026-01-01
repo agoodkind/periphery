@@ -51,6 +51,7 @@
     - [XCTestCase](#xctestcase)
     - [Interface Builder](#interface-builder)
     - [SPI (System Programming Interface)](#spi-system-programming-interface)
+    - [Localized Strings](#localized-strings)
 - [Comment Commands](#comment-commands)
 - [Xcode Integration](#xcode-integration)
 - [Excluding Files](#excluding-files)
@@ -364,6 +365,21 @@ For example, with `--retain-public --no-retain-spi Internal`, Periphery will:
 - **Check** `@_spi(Internal) public` declarations for unused code
 
 This is particularly useful for internal SPIs that should be audited for unused code while still retaining the framework's public API.
+### Localized Strings
+
+Periphery can identify unused localized strings in String Catalog (`.xcstrings`) files. It detects keys used via `NSLocalizedString`, `String(localized:)`, `LocalizedStringKey`, `LocalizedStringResource`, `Text`, and `Bundle.localizedString(forKey:)`. This analysis can be disabled with `--disable-unused-localized-string-analysis`.
+
+> [!NOTE]
+> Only static string literals are detected. Dynamic keys (e.g., `String(localized: variable)`) cannot be analyzed and may result in false positives. Where possible, refactor dynamic keys to use conditional expressions with static literals:
+> ```swift
+> var message: String {
+>     if condition {
+>         String(localized: "message_success")
+>     } else {
+>         String(localized: "message_failure")
+>     }
+> }
+> ```
 
 ## Comment Commands
 
@@ -528,6 +544,9 @@ Periphery can analyze projects using other build systems, though it cannot drive
     ],
     "xcmappingmodels": [
         "path/to/file.xcmappingmodel"
+    ],
+    "xcstrings": [
+        "path/to/Localizable.xcstrings"
     ]
 }
 ```

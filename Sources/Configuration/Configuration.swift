@@ -86,6 +86,9 @@ public final class Configuration {
     @Setting(key: "disable_unused_import_analysis", defaultValue: false)
     public var disableUnusedImportAnalysis: Bool
 
+    @Setting(key: "disable_unused_localized_string_analysis", defaultValue: false)
+    public var disableUnusedLocalizedStringAnalysis: Bool
+
     @Setting(key: "superfluous_ignore_comments", defaultValue: true)
     public var superfluousIgnoreComments: Bool
 
@@ -231,7 +234,7 @@ public final class Configuration {
         $project, $schemes, $excludeTargets, $excludeTests, $indexExclude, $reportExclude, $reportInclude, $outputFormat,
         $retainPublic, $noRetainSPI, $retainFiles, $retainAssignOnlyProperties, $retainAssignOnlyPropertyTypes, $retainObjcAccessible,
         $retainObjcAnnotated, $retainUnusedProtocolFuncParams, $retainSwiftUIPreviews, $disableRedundantPublicAnalysis,
-        $disablePlatformConditionalRetention, $disableUnusedImportAnalysis, $superfluousIgnoreComments, $retainUnusedImportedModules,
+        $disablePlatformConditionalRetention, $disableUnusedImportAnalysis, $disableUnusedLocalizedStringAnalysis, $superfluousIgnoreComments, $retainUnusedImportedModules,
         $externalEncodableProtocols, $externalCodableProtocols, $externalTestCaseClasses, $verbose, $quiet, $color,
         $disableUpdateCheck, $strict, $indexStorePath,
         $skipBuild, $skipSchemesValidation, $cleanBuild, $buildArguments, $xcodeListArguments, $relativeResults,

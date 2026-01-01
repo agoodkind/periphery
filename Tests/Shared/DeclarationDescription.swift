@@ -113,4 +113,8 @@ struct DeclarationDescription: CustomStringConvertible {
     static func extensionEnum(_ name: String, line: Int? = nil) -> Self {
         self.init(kind: .extensionEnum, name: name, line: line)
     }
+
+    static func localizedString(_ name: String, line: Int? = nil) -> Self {
+        self.init(kind: .localizedString, name: name, line: line)
+    }
 }

@@ -71,6 +71,8 @@ struct ScanCommand: ParsableCommand {
 
     @Flag(inversion: .prefixedNo, help: "Report superfluous ignore comments")
     var superfluousIgnoreComments: Bool = defaultConfiguration.$superfluousIgnoreComments.defaultValue
+    @Flag(help: "Disable identification of unused localized strings from String Catalogs (xcstrings)")
+    var disableUnusedLocalizedStringAnalysis: Bool = defaultConfiguration.$disableUnusedLocalizedStringAnalysis.defaultValue
 
     @Option(parsing: .upToNextOption, help: "Names of unused imported modules to retain")
     var retainUnusedImportedModules: [String] = defaultConfiguration.$retainUnusedImportedModules.defaultValue
@@ -208,6 +210,7 @@ struct ScanCommand: ParsableCommand {
         configuration.apply(\.$disablePlatformConditionalRetention, disablePlatformConditionalRetention)
         configuration.apply(\.$disableUnusedImportAnalysis, disableUnusedImportAnalysis)
         configuration.apply(\.$superfluousIgnoreComments, superfluousIgnoreComments)
+        configuration.apply(\.$disableUnusedLocalizedStringAnalysis, disableUnusedLocalizedStringAnalysis)
         configuration.apply(\.$retainUnusedImportedModules, retainUnusedImportedModules)
         configuration.apply(\.$externalEncodableProtocols, externalEncodableProtocols)
         configuration.apply(\.$externalCodableProtocols, externalCodableProtocols)
