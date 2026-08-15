@@ -1,3 +1,6 @@
+> Upstream abandoned free, offline distribution for an authenticated commercial
+> product. This fork rejects that decision and preserves unrestricted local use.
+
 <h1 align="center">
   <img src="assets/logo.png" alt="Periphery" height="60" />
   <br>
