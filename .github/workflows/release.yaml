@@ -16,9 +16,6 @@ jobs:
     runs-on: macos-26
     env:
       VERSION: 3.8.0-agoodkind.2
-      CERTIFICATE_PATH: ${{ runner.temp }}/developer-id.p12
-      KEYCHAIN_PATH: ${{ runner.temp }}/release.keychain-db
-      NOTARY_KEY_PATH: ${{ runner.temp }}/notary-key.p8
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,6 +44,8 @@ jobs:
           DEVELOPER_ID_APPLICATION_CERTIFICATE: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE }}
           DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          CERTIFICATE_PATH: ${{ runner.temp }}/developer-id.p12
+          KEYCHAIN_PATH: ${{ runner.temp }}/release.keychain-db
         run: |
           set -euo pipefail
           printf '%s' "$DEVELOPER_ID_APPLICATION_CERTIFICATE" | base64 -D > "$CERTIFICATE_PATH"
@@ -82,6 +81,7 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
           NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_PATH: ${{ runner.temp }}/notary-key.p8
         run: |
           set -euo pipefail
           printf '%s' "$NOTARY_KEY" > "$NOTARY_KEY_PATH"
