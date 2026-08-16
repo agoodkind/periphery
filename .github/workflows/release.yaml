@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       VERSION: 3.8.0-agoodkind.2
       CERTIFICATE_PATH: ${{ runner.temp }}/developer-id.p12
