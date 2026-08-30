@@ -68,7 +68,7 @@ jobs:
           TOOLCHAIN_USR=$(dirname "$(dirname "$SWIFT_PATH")")
           cp "$TOOLCHAIN_USR/lib/libIndexStore.dylib" "release/periphery-${VERSION}/libIndexStore.dylib"
           test "$(lipo -archs "release/periphery-${VERSION}/periphery")" = "arm64"
-          test "$(lipo -archs "release/periphery-${VERSION}/libIndexStore.dylib")" = "arm64"
+          lipo "release/periphery-${VERSION}/libIndexStore.dylib" -verify_arch arm64
           "release/periphery-${VERSION}/periphery" version
 
       - name: Sign executable and package artifacts
