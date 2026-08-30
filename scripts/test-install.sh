@@ -25,8 +25,8 @@ chmod +x "${FIXTURE_DIRECTORY}/periphery-${VERSION}/periphery"
 
 (
     cd "${FIXTURE_DIRECTORY}"
-    ditto -c -k --sequesterRsrc --keepParent "periphery-${VERSION}" "periphery-${VERSION}-macos-universal.zip"
-    shasum -a 256 "periphery-${VERSION}-macos-universal.zip" > "checksums.txt"
+    ditto -c -k --sequesterRsrc --keepParent "periphery-${VERSION}" "periphery-${VERSION}-macos-arm64.zip"
+    shasum -a 256 "periphery-${VERSION}-macos-arm64.zip" > "checksums.txt"
 )
 
 PERIPHERY_RELEASE_BASE_URL="file://${FIXTURE_DIRECTORY}" \
@@ -36,7 +36,7 @@ PERIPHERY_RELEASE_BASE_URL="file://${FIXTURE_DIRECTORY}" \
 test -x "${INSTALL_DIRECTORY}/periphery"
 test "$("${INSTALL_DIRECTORY}/periphery" version)" = "Periphery ${VERSION}"
 
-printf 'corrupt archive' > "${FIXTURE_DIRECTORY}/periphery-${VERSION}-macos-universal.zip"
+printf 'corrupt archive' > "${FIXTURE_DIRECTORY}/periphery-${VERSION}-macos-arm64.zip"
 if PERIPHERY_RELEASE_BASE_URL="file://${FIXTURE_DIRECTORY}" \
     INSTALL_DIR="${TEMPORARY_DIRECTORY}/failed-install" \
     "${REPOSITORY_ROOT}/scripts/install.sh"; then

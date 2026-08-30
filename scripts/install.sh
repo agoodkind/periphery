@@ -3,10 +3,16 @@
 set -euo pipefail
 
 VERSION=3.8.0-agoodkind.2
-ARCHIVE_NAME="periphery-${VERSION}-macos-universal.zip"
+ARCHIVE_NAME="periphery-${VERSION}-macos-arm64.zip"
 CHECKSUMS_NAME=checksums.txt
 RELEASE_BASE_URL=${PERIPHERY_RELEASE_BASE_URL:-"https://github.com/agoodkind/periphery/releases/download/${VERSION}"}
 INSTALL_DIRECTORY=${INSTALL_DIR:-"${HOME}/.local/bin"}
+
+if [[ "$(uname -m)" != "arm64" ]]; then
+    printf 'Periphery %s supports arm64 macOS only\n' "${VERSION}" >&2
+    exit 1
+fi
+
 TEMPORARY_DIRECTORY=$(mktemp -d)
 
 cleanup() {

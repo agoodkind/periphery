@@ -56,25 +56,40 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-      - name: Build universal executable
+      - name: Build arm64 executable
+        env:
+          SWIFT_COMMAND: swift
         run: |
           set -euo pipefail
-          swift build -c release --arch arm64 --scratch-path .build/arm64
-          swift build -c release --arch x86_64 --scratch-path .build/x86_64
-          mkdir -p release/periphery-${VERSION}
-          lipo -create .build/arm64/release/periphery .build/x86_64/release/periphery -output release/periphery-${VERSION}/periphery
-          lipo -archs release/periphery-${VERSION}/periphery
+          "$SWIFT_COMMAND" build -c release --arch arm64 --product periphery --scratch-path .build/arm64
+          mkdir -p "release/periphery-${VERSION}"
+          cp .build/arm64/release/periphery "release/periphery-${VERSION}/periphery"
+          test "$(lipo -archs "release/periphery-${VERSION}/periphery")" = "arm64"
 
       - name: Sign executable and package artifacts
         env:
           SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION_SIGNING_IDENTITY }}
+          SIGNATURE_DETAILS_PATH: ${{ runner.temp }}/signature-details.txt
         run: |
           set -euo pipefail
-          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "release/periphery-${VERSION}/periphery"
-          codesign --verify --deep --strict --verbose=2 "release/periphery-${VERSION}/periphery"
-          ditto -c -k --sequesterRsrc --keepParent "release/periphery-${VERSION}" "release/periphery-${VERSION}-macos-universal.zip"
-          hdiutil create -volname "Periphery ${VERSION}" -srcfolder "release/periphery-${VERSION}" -format UDZO "release/periphery-${VERSION}.dmg"
-          codesign --force --timestamp --sign "$SIGNING_IDENTITY" "release/periphery-${VERSION}.dmg"
+          BINARY_PATH="release/periphery-${VERSION}/periphery"
+          ZIP_PATH="release/periphery-${VERSION}-macos-arm64.zip"
+          DMG_PATH="release/periphery-${VERSION}-macos-arm64.dmg"
+          EXPECTED_TEAM_ID=$(printf '%s' "$SIGNING_IDENTITY" | sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p')
+          if [[ -z "$EXPECTED_TEAM_ID" ]]; then
+            printf 'Unable to read Team ID from signing identity\n' >&2
+            exit 1
+          fi
+          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$BINARY_PATH"
+          codesign --verify --deep --strict --verbose=2 "$BINARY_PATH"
+          codesign --display --verbose=4 "$BINARY_PATH" 2>&1 | tee "$SIGNATURE_DETAILS_PATH"
+          grep -Fq "TeamIdentifier=${EXPECTED_TEAM_ID}" "$SIGNATURE_DETAILS_PATH"
+          grep -Eq '^Timestamp=' "$SIGNATURE_DETAILS_PATH"
+          grep -Eq '^CodeDirectory .* flags=.*runtime' "$SIGNATURE_DETAILS_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "release/periphery-${VERSION}" "$ZIP_PATH"
+          hdiutil create -volname "Periphery ${VERSION}" -srcfolder "release/periphery-${VERSION}" -format UDZO "$DMG_PATH"
+          codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG_PATH"
+          codesign --verify --strict --verbose=2 "$DMG_PATH"
 
       - name: Notarize and staple disk image
         env:
@@ -84,11 +99,12 @@ jobs:
           NOTARY_KEY_PATH: ${{ runner.temp }}/notary-key.p8
         run: |
           set -euo pipefail
+          DMG_PATH="release/periphery-${VERSION}-macos-arm64.dmg"
           printf '%s' "$NOTARY_KEY" > "$NOTARY_KEY_PATH"
-          xcrun notarytool submit "release/periphery-${VERSION}.dmg" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
-          xcrun stapler staple "release/periphery-${VERSION}.dmg"
-          xcrun stapler validate "release/periphery-${VERSION}.dmg"
-          spctl --assess --type open --context context:primary-signature -v "release/periphery-${VERSION}.dmg"
+          xcrun notarytool submit "$DMG_PATH" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+          spctl --assess --type open --context context:primary-signature -v "$DMG_PATH"
 
       - name: Create checksums
         run: |
@@ -96,7 +112,7 @@ jobs:
           cp scripts/install.sh release/install.sh
           (
             cd release
-            shasum -a 256 "periphery-${VERSION}-macos-universal.zip" "periphery-${VERSION}.dmg" install.sh > checksums.txt
+            shasum -a 256 "periphery-${VERSION}-macos-arm64.zip" "periphery-${VERSION}-macos-arm64.dmg" install.sh > checksums.txt
           )
 
       - name: Publish release assets
@@ -105,8 +121,8 @@ jobs:
         run: |
           set -euo pipefail
           gh release create --verify-tag "$TAG" --title "Periphery $VERSION" --generate-notes \
-            "release/periphery-${VERSION}-macos-universal.zip" \
-            "release/periphery-${VERSION}.dmg" \
+            "release/periphery-${VERSION}-macos-arm64.zip" \
+            "release/periphery-${VERSION}-macos-arm64.dmg" \
             "release/install.sh#install.sh" \
             "release/checksums.txt"
 
@@ -114,7 +130,7 @@ jobs:
         with:
           name: periphery-${{ env.VERSION }}
           path: |
-            release/periphery-${{ env.VERSION }}-macos-universal.zip
-            release/periphery-${{ env.VERSION }}.dmg
+            release/periphery-${{ env.VERSION }}-macos-arm64.zip
+            release/periphery-${{ env.VERSION }}-macos-arm64.dmg
             release/install.sh
             release/checksums.txt
