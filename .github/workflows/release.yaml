@@ -96,7 +96,7 @@ jobs:
           grep -Fq "TeamIdentifier=${EXPECTED_TEAM_ID}" "$SIGNATURE_DETAILS_PATH"
           grep -Eq '^Timestamp=' "$SIGNATURE_DETAILS_PATH"
           grep -Eq '^CodeDirectory .* flags=.*runtime' "$SIGNATURE_DETAILS_PATH"
-          codesign --display --entitlements - "$BINARY_PATH" 2> "$SIGNED_ENTITLEMENTS_PATH"
+          codesign --display --entitlements - "$BINARY_PATH" 2>&1 | tee "$SIGNED_ENTITLEMENTS_PATH"
           grep -Fq 'com.apple.security.cs.disable-library-validation' "$SIGNED_ENTITLEMENTS_PATH"
           "$BINARY_PATH" version
           ditto -c -k --sequesterRsrc --keepParent "release/periphery-${VERSION}" "$ZIP_PATH"
