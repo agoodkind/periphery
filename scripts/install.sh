@@ -26,6 +26,7 @@ ARCHIVE_PATH="${TEMPORARY_DIRECTORY}/${ARCHIVE_NAME}"
 CHECKSUMS_PATH="${TEMPORARY_DIRECTORY}/${CHECKSUMS_NAME}"
 EXTRACT_DIRECTORY="${TEMPORARY_DIRECTORY}/extract"
 TEMPORARY_BINARY="${INSTALL_DIRECTORY}/.periphery.${RANDOM}.${RANDOM}"
+TEMPORARY_LIBRARY="${INSTALL_DIRECTORY}/.libIndexStore.${RANDOM}.${RANDOM}.dylib"
 
 curl --fail --location --retry 3 --silent --show-error --output "${ARCHIVE_PATH}" "${RELEASE_BASE_URL}/${ARCHIVE_NAME}"
 curl --fail --location --retry 3 --silent --show-error --output "${CHECKSUMS_PATH}" "${RELEASE_BASE_URL}/${CHECKSUMS_NAME}"
@@ -44,6 +45,8 @@ fi
 
 mkdir -p "${EXTRACT_DIRECTORY}"
 unzip -q "${ARCHIVE_PATH}" -d "${EXTRACT_DIRECTORY}"
+install -m 755 "${EXTRACT_DIRECTORY}/periphery-${VERSION}/libIndexStore.dylib" "${TEMPORARY_LIBRARY}"
 install -m 755 "${EXTRACT_DIRECTORY}/periphery-${VERSION}/periphery" "${TEMPORARY_BINARY}"
+mv -f "${TEMPORARY_LIBRARY}" "${INSTALL_DIRECTORY}/libIndexStore.dylib"
 mv -f "${TEMPORARY_BINARY}" "${INSTALL_DIRECTORY}/periphery"
 "${INSTALL_DIRECTORY}/periphery" version

@@ -22,6 +22,7 @@ if [[ "${1:-}" == "version" ]]; then
 fi
 EOF
 chmod +x "${FIXTURE_DIRECTORY}/periphery-${VERSION}/periphery"
+printf 'fixture library\n' > "${FIXTURE_DIRECTORY}/periphery-${VERSION}/libIndexStore.dylib"
 
 (
     cd "${FIXTURE_DIRECTORY}"
@@ -34,6 +35,7 @@ PERIPHERY_RELEASE_BASE_URL="file://${FIXTURE_DIRECTORY}" \
     "${REPOSITORY_ROOT}/scripts/install.sh"
 
 test -x "${INSTALL_DIRECTORY}/periphery"
+test -f "${INSTALL_DIRECTORY}/libIndexStore.dylib"
 test "$("${INSTALL_DIRECTORY}/periphery" version)" = "Periphery ${VERSION}"
 
 printf 'corrupt archive' > "${FIXTURE_DIRECTORY}/periphery-${VERSION}-macos-arm64.zip"

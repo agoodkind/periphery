@@ -64,7 +64,12 @@ jobs:
           "$SWIFT_COMMAND" build -c release --arch arm64 --product periphery --scratch-path .build/arm64
           mkdir -p "release/periphery-${VERSION}"
           cp .build/arm64/release/periphery "release/periphery-${VERSION}/periphery"
+          SWIFT_PATH=$(xcrun --find swift)
+          TOOLCHAIN_USR=$(dirname "$(dirname "$SWIFT_PATH")")
+          cp "$TOOLCHAIN_USR/lib/libIndexStore.dylib" "release/periphery-${VERSION}/libIndexStore.dylib"
           test "$(lipo -archs "release/periphery-${VERSION}/periphery")" = "arm64"
+          test "$(lipo -archs "release/periphery-${VERSION}/libIndexStore.dylib")" = "arm64"
+          "release/periphery-${VERSION}/periphery" version
 
       - name: Sign executable and package artifacts
         env:
@@ -73,6 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           BINARY_PATH="release/periphery-${VERSION}/periphery"
+          LIBRARY_PATH="release/periphery-${VERSION}/libIndexStore.dylib"
           ZIP_PATH="release/periphery-${VERSION}-macos-arm64.zip"
           DMG_PATH="release/periphery-${VERSION}-macos-arm64.dmg"
           EXPECTED_TEAM_ID=$(printf '%s' "$SIGNING_IDENTITY" | sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p')
@@ -82,10 +88,12 @@ jobs:
           fi
           codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$BINARY_PATH"
           codesign --verify --deep --strict --verbose=2 "$BINARY_PATH"
+          codesign --verify --strict --verbose=2 "$LIBRARY_PATH"
           codesign --display --verbose=4 "$BINARY_PATH" 2>&1 | tee "$SIGNATURE_DETAILS_PATH"
           grep -Fq "TeamIdentifier=${EXPECTED_TEAM_ID}" "$SIGNATURE_DETAILS_PATH"
           grep -Eq '^Timestamp=' "$SIGNATURE_DETAILS_PATH"
           grep -Eq '^CodeDirectory .* flags=.*runtime' "$SIGNATURE_DETAILS_PATH"
+          "$BINARY_PATH" version
           ditto -c -k --sequesterRsrc --keepParent "release/periphery-${VERSION}" "$ZIP_PATH"
           hdiutil create -volname "Periphery ${VERSION}" -srcfolder "release/periphery-${VERSION}" -format UDZO "$DMG_PATH"
           codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG_PATH"
@@ -121,11 +129,19 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          gh release create --verify-tag "$TAG" --title "Periphery $VERSION" --generate-notes \
+          ASSETS=(
             "release/periphery-${VERSION}-macos-arm64.zip" \
             "release/periphery-${VERSION}-macos-arm64.dmg" \
             "release/install.sh#install.sh" \
             "release/checksums.txt"
+          )
+          if EXISTING_TAG=$(gh release view "$TAG" --json tagName --jq .tagName); then
+            printf 'Updating existing release %s\n' "$EXISTING_TAG"
+            gh release upload "$TAG" --clobber "${ASSETS[@]}"
+          else
+            printf 'Creating release %s\n' "$TAG"
+            gh release create --verify-tag "$TAG" --title "Periphery $VERSION" --generate-notes "${ASSETS[@]}"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
