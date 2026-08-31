@@ -148,6 +148,39 @@ jobs:
             gh release create --verify-tag "$TAG" --title "Periphery $VERSION" --generate-notes "${ASSETS[@]}"
           fi
 
+      - name: Check out Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: agoodkind/homebrew-tap
+          path: homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+
+      - name: Update Homebrew formula
+        env:
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          SIGNING_KEY_PATH: ${{ runner.temp }}/homebrew-tap-deploy-key
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$SIGNING_KEY_PATH"' EXIT
+          FORMULA_PATH="homebrew-tap/Formula/periphery.rb"
+          ZIP_PATH="release/periphery-${VERSION}-macos-arm64.zip"
+          ZIP_SHA=$(shasum -a 256 "$ZIP_PATH" | awk '{ print $1 }')
+          ruby .github/scripts/update_homebrew_formula.rb "$FORMULA_PATH" "$VERSION" "$ZIP_SHA"
+          ruby -c "$FORMULA_PATH"
+          printf '%s' "$HOMEBREW_TAP_DEPLOY_KEY" > "$SIGNING_KEY_PATH"
+          chmod 600 "$SIGNING_KEY_PATH"
+          git -C homebrew-tap config user.name "Periphery release automation"
+          git -C homebrew-tap config user.email "noreply@agoodkind.io"
+          git -C homebrew-tap config gpg.format ssh
+          git -C homebrew-tap config user.signingkey "$SIGNING_KEY_PATH"
+          git -C homebrew-tap add Formula/periphery.rb
+          if git -C homebrew-tap diff --cached --quiet; then
+            printf 'Homebrew formula already matches %s\n' "$VERSION"
+            exit 0
+          fi
+          git -C homebrew-tap commit -S -m "Update Periphery to ${VERSION}"
+          git -C homebrew-tap push origin HEAD:main
+
       - uses: actions/upload-artifact@v4
         with:
           name: periphery-${{ env.VERSION }}
