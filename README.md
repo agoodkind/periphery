@@ -15,7 +15,7 @@
 <img src="https://img.shields.io/github/release/peripheryapp/periphery.svg?color=008DFF"/></a>
 <img src="https://img.shields.io/badge/platform-macOS%20|%20Linux-008DFF">
 <a href="#sponsors-">
-<img src="https://img.shields.io/github/sponsors/peripheryapp?logo=githubsponsors&color=db61a2">
+<img src="https://img.shields.io/github/sponsors/agoodkind?logo=githubsponsors&color=db61a2">
 </a>
 <br>
 <br>
@@ -576,7 +576,7 @@ Due to some underlying bugs in Swift, Periphery may in some instances report inc
 
 ## Sponsors ![Sponsors](assets/sponsor-20.svg)
 
-Periphery is a passion project that takes a huge amount of effort to maintain and develop. If you find Periphery useful, please consider sponsoring through [GitHub Sponsors](https://github.com/sponsors/peripheryapp).
+Support maintenance of this free, offline fork through [GitHub Sponsors](https://github.com/sponsors/agoodkind).
 
 Special thanks go to the following generous sponsors:
 
