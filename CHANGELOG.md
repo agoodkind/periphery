@@ -10,7 +10,7 @@
 
 ##### Bug Fixes
 
-- None.
+- Fix: deterministic DerivedData cache path (schemes were hashed from an unordered Set), #5 / upstream #1141.
 
 ## 3.8.1 (2026-10-25)
 
