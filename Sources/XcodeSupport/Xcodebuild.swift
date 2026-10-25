@@ -119,7 +119,7 @@ public final class Xcodebuild {
         }
     }
 
-    private func derivedDataPath(for project: XcodeProjectlike, schemes: [String]) throws -> FilePath {
+    func derivedDataPath(for project: XcodeProjectlike, schemes: [String]) throws -> FilePath {
         // Given a project with two schemes: A and B, a scenario can arise where the index store contains conflicting
         // data. If scheme A is built, then the source file modified and then scheme B built, the index store will
         // contain two records for that source file. One reflects the state of the file when scheme A was built, and the
@@ -127,7 +127,7 @@ public final class Xcodebuild {
 
         let xcodeVersionHash = try version().djb2Hex
         let projectHash = project.name.djb2Hex
-        let schemesHash = Array(schemes).joined().djb2Hex
+        let schemesHash = schemes.sorted().joined().djb2Hex
 
         return try Constants.cachePath().appending("DerivedData-\(xcodeVersionHash)-\(projectHash)-\(schemesHash)")
     }
