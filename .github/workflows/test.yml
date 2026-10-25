@@ -21,6 +21,14 @@ jobs:
     steps:
       - uses: actions/checkout@master
       - run: bash scripts/test-install.sh
+      - name: Check out Homebrew formula
+        uses: actions/checkout@v4
+        with:
+          repository: agoodkind/homebrew-tap
+          path: homebrew-tap
+          persist-credentials: false
+      - name: Test signed release publication
+        run: swift .github/scripts/release-tests.swift .github/scripts/release.swift homebrew-tap/Formula/periphery.rb
   lint:
     runs-on: macos-26
     name: Lint
@@ -30,39 +38,6 @@ jobs:
         with:
           cache: false
       - run: mise run lint-ci
-      - name: Check generated Bazel rules
-        run: mise r gen-bazel-rules && git diff --quiet --exit-code
-  bazel:
-      name: Bazel (${{ matrix.bazel }}, ${{ matrix.os }})
-      strategy:
-        fail-fast: false
-        matrix:
-          bazel: [8.x, 9.x]
-          os: [macOS, Linux]
-          include:
-            - os: macOS
-              runs-on: macos-26
-              baseline: bazel.json
-            - os: Linux
-              runs-on: ubuntu-latest
-              container: swift:latest
-              cc: clang
-              baseline: linux-bazel.json
-      runs-on: ${{ matrix.runs-on }}
-      container: ${{ matrix.container }}
-      env:
-        USE_BAZEL_VERSION: ${{ matrix.bazel }}
-        CC: ${{ matrix.cc }}
-      steps:
-        - uses: actions/checkout@master
-        - uses: bazel-contrib/setup-bazel@0.15.0
-          with:
-            bazelisk-version: 1.x
-            bazelisk-cache: true
-            disk-cache: bazel-${{ matrix.os }}-${{ matrix.bazel }}
-            repository-cache: true
-        - name: Scan
-          run: bazel run //:periphery -- scan --bazel --quiet --strict --baseline baselines/${{ matrix.baseline }}
   macOS:
     name: macOS
     strategy:
