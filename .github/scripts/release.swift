@@ -24,9 +24,15 @@ func required(_ name: String, allowEmpty: Bool = false) throws -> String {
     return value
 }
 
+enum ProcessOutput {
+    case inherit
+    case capture
+    case captureWithError
+}
+
 @discardableResult
 func run(_ executable: String, _ arguments: [String], at directory: URL? = nil,
-         capture: Bool = false, captureError: Bool = false) throws -> String
+         outputMode: ProcessOutput = .inherit) throws -> String
 {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -34,18 +40,18 @@ func run(_ executable: String, _ arguments: [String], at directory: URL? = nil,
     process.currentDirectoryURL = directory
     let output = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     var handle: FileHandle?
-    if capture {
+    if outputMode != .inherit {
         guard files.createFile(atPath: output.path, contents: nil) else {
             throw ReleaseError("Cannot create the command output file")
         }
 
         handle = try FileHandle(forWritingTo: output)
         process.standardOutput = handle
-        if captureError { process.standardError = handle }
+        if outputMode == .captureWithError { process.standardError = handle }
     }
     defer {
         try? handle?.close()
-        if capture { try? files.removeItem(at: output) }
+        if outputMode != .inherit { try? files.removeItem(at: output) }
     }
     try process.run()
     process.waitUntilExit()
@@ -53,7 +59,7 @@ func run(_ executable: String, _ arguments: [String], at directory: URL? = nil,
         throw ReleaseError("\(executable) failed with status \(process.terminationStatus)")
     }
 
-    if capture {
+    if outputMode != .inherit {
         return try String(contentsOf: output, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     return ""
@@ -116,9 +122,19 @@ struct Entitlements: Decodable {
 
 struct GitHub {
     let repository: String
+    let token: String?
+
+    init(repository: String, token: String?) {
+        self.repository = repository
+        if let token, !token.isEmpty {
+            self.token = token
+        } else {
+            self.token = nil
+        }
+    }
 
     func request(_ path: String, method: String = "GET", body: Data? = nil,
-                 contentType: String = "application/json", host: String = "api.github.com") async throws -> (Data, Int)
+                 contentType: String = "application/json", host: String = "api.github.com") async throws -> Data
     {
         guard let url = URL(string: "https://\(host)/\(path)") else {
             throw ReleaseError("Invalid GitHub API path")
@@ -131,7 +147,7 @@ struct GitHub {
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.setValue("Periphery-release", forHTTPHeaderField: "User-Agent")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        if let token = environment["GH_TOKEN"], !token.isEmpty {
+        if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         } else if method != "GET" {
             throw ReleaseError("Set GH_TOKEN before publishing a release")
@@ -140,18 +156,17 @@ struct GitHub {
         guard let response = response as? HTTPURLResponse else {
             throw ReleaseError("GitHub did not return an HTTP response")
         }
-        guard (200 ..< 300).contains(response.statusCode) || response.statusCode == 404 else {
+        guard (200 ..< 300).contains(response.statusCode) else {
             throw ReleaseError("GitHub API \(method) \(path) failed with HTTP \(response.statusCode)")
         }
 
-        return (data, response.statusCode)
+        return data
     }
 
     func release(_ version: String) async throws -> GitHubRelease? {
         var page = 1
         while true {
-            let (data, status) = try await request("repos/\(repository)/releases?per_page=100&page=\(page)")
-            guard status != 404 else { throw ReleaseError("GitHub repository \(repository) does not exist") }
+            let data = try await request("repos/\(repository)/releases?per_page=100&page=\(page)")
 
             let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
             if let release = releases.first(where: { $0.tag_name == version }) { return release }
@@ -161,10 +176,7 @@ struct GitHub {
     }
 
     func send(_ path: String, method: String, value: some Encodable) async throws -> Data {
-        let (data, status) = try await request(path, method: method, body: JSONEncoder().encode(value))
-        guard status != 404 else { throw ReleaseError("GitHub API resource does not exist: \(path)") }
-
-        return data
+        try await request(path, method: method, body: JSONEncoder().encode(value))
     }
 }
 
@@ -180,7 +192,7 @@ struct ReleaseContext {
 
         root = URL(fileURLWithPath: files.currentDirectoryPath, isDirectory: true)
         directory = root.appendingPathComponent("release", isDirectory: true)
-        github = try GitHub(repository: required("GITHUB_REPOSITORY"))
+        github = try GitHub(repository: required("GITHUB_REPOSITORY"), token: environment["GH_TOKEN"])
     }
 
     static func suffix(_ tag: String) -> Int? {
@@ -217,16 +229,16 @@ struct ReleaseContext {
         try run(required("SWIFT_COMMAND"), ["build", "-c", "release", "--arch", "arm64", "--product", "periphery", "--scratch-path", ".build/arm64"])
         try files.createDirectory(at: product, withIntermediateDirectories: true)
         try files.copyItem(at: root.appendingPathComponent(".build/arm64/release/periphery"), to: product.appendingPathComponent("periphery"))
-        let swiftPath = try run("xcrun", ["--find", "swift"], capture: true)
+        let swiftPath = try run("xcrun", ["--find", "swift"], outputMode: .capture)
         let library = URL(fileURLWithPath: swiftPath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib/libIndexStore.dylib")
         try files.copyItem(at: library, to: product.appendingPathComponent("libIndexStore.dylib"))
         let binary = product.appendingPathComponent("periphery").path
-        guard try run("lipo", ["-archs", binary], capture: true) == "arm64" else {
+        guard try run("lipo", ["-archs", binary], outputMode: .capture) == "arm64" else {
             throw ReleaseError("The release executable must contain only arm64 code")
         }
 
         try run("lipo", [product.appendingPathComponent("libIndexStore.dylib").path, "-verify_arch", "arm64"])
-        guard try run(binary, ["version"], capture: true) == version else {
+        guard try run(binary, ["version"], outputMode: .capture) == version else {
             throw ReleaseError("The executable version must equal \(version)")
         }
     }
@@ -257,14 +269,14 @@ struct ReleaseContext {
         try run("codesign", ["--force", "--options", "runtime", "--timestamp", "--entitlements", required("ENTITLEMENTS_PATH"), "--sign", identity, binary])
         try run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", binary])
         try run("codesign", ["--verify", "--strict", "--verbose=2", library])
-        let details = try run("codesign", ["--display", "--verbose=4", binary], capture: true, captureError: true)
+        let details = try run("codesign", ["--display", "--verbose=4", binary], outputMode: .captureWithError)
         guard details.contains("TeamIdentifier=\(team)"), details.contains("Timestamp="),
               details.range(of: #"(?m)^CodeDirectory .* flags=.*runtime"#, options: .regularExpression) != nil
         else {
             throw ReleaseError("The signature must include the expected Team ID, timestamp, and hardened runtime")
         }
 
-        let entitlements = try run("codesign", ["--display", "--entitlements", "-", "--xml", binary], capture: true)
+        let entitlements = try run("codesign", ["--display", "--entitlements", "-", "--xml", binary], outputMode: .capture)
         let decoded = try PropertyListDecoder().decode(Entitlements.self, from: Data(entitlements.utf8))
         guard decoded.disableLibraryValidation else { throw ReleaseError("Library validation entitlement is missing") }
 
@@ -298,11 +310,11 @@ struct ReleaseContext {
 
     func publish() async throws {
         let source = try required("SOURCE_SHA")
-        let tags = try run("git", ["tag", "--list", version], capture: true)
+        let tags = try run("git", ["tag", "--list", version], outputMode: .capture)
         if tags.isEmpty {
             try run("git", ["tag", version, source])
         } else {
-            guard try run("git", ["rev-parse", "\(version)^{commit}"], capture: true) == source else {
+            guard try run("git", ["rev-parse", "\(version)^{commit}"], outputMode: .capture) == source else {
                 throw ReleaseError("Tag \(version) does not match source commit \(source)")
             }
         }
@@ -326,12 +338,10 @@ struct ReleaseContext {
         }
         for name in assetNames {
             if let asset = release.assets.first(where: { $0.name == name }) {
-                let (_, status) = try await github.request("repos/\(github.repository)/releases/assets/\(asset.id)", method: "DELETE")
-                guard status != 404 else { throw ReleaseError("Draft asset \(name) disappeared during publication") }
+                _ = try await github.request("repos/\(github.repository)/releases/assets/\(asset.id)", method: "DELETE")
             }
             let data = try Data(contentsOf: directory.appendingPathComponent(name))
-            let (_, status) = try await github.request("repos/\(github.repository)/releases/\(release.id)/assets?name=\(name)", method: "POST", body: data, contentType: "application/octet-stream", host: "uploads.github.com")
-            guard status != 404 else { throw ReleaseError("The draft release does not exist") }
+            _ = try await github.request("repos/\(github.repository)/releases/\(release.id)/assets?name=\(name)", method: "POST", body: data, contentType: "application/octet-stream", host: "uploads.github.com")
         }
         struct Publish: Encodable { let draft = false; let make_latest = "true" }
         _ = try await github.send("repos/\(github.repository)/releases/\(release.id)", method: "PATCH", value: Publish())
@@ -384,7 +394,7 @@ struct ReleaseContext {
             try? files.removeItem(at: key)
             try? files.removeItem(at: publicKey)
         }
-        let publicValue = try run("ssh-keygen", ["-y", "-P", "", "-f", key.path], capture: true)
+        let publicValue = try run("ssh-keygen", ["-y", "-P", "", "-f", key.path], outputMode: .capture)
         try (publicValue + "\n").write(to: publicKey, atomically: true, encoding: .utf8)
         for (name, value) in [
             ("user.name", "Periphery release automation"), ("user.email", "noreply@agoodkind.io"),
@@ -393,7 +403,7 @@ struct ReleaseContext {
             try run("git", ["config", name, value], at: tap)
         }
         try run("git", ["add", "Formula/periphery.rb"], at: tap)
-        if try run("git", ["diff", "--cached", "--name-only"], at: tap, capture: true).isEmpty {
+        if try run("git", ["diff", "--cached", "--name-only"], at: tap, outputMode: .capture).isEmpty {
             print("Homebrew formula already matches \(version)")
             return
         }
@@ -405,16 +415,16 @@ struct ReleaseContext {
 func prepare() throws {
     let source = try required("SOURCE_SHA", allowEmpty: true)
     let requested = try required("REQUESTED_TAG", allowEmpty: true)
-    let head = try run("git", ["rev-parse", "HEAD"], capture: true)
+    let head = try run("git", ["rev-parse", "HEAD"], outputMode: .capture)
     guard source.isEmpty || source == head else { throw ReleaseError("SOURCE_SHA must equal the checked-out commit \(head)") }
 
-    let tags = try run("git", ["tag", "--list", "3.8.0-agoodkind.*"], capture: true).split(separator: "\n").map(String.init)
+    let tags = try run("git", ["tag", "--list", "3.8.0-agoodkind.*"], outputMode: .capture).split(separator: "\n").map(String.init)
     let version: String
     if !requested.isEmpty {
         guard ReleaseContext.suffix(requested) != nil, tags.contains(requested) else {
             throw ReleaseError("REQUESTED_TAG must select an existing 3.8.0-agoodkind.N tag")
         }
-        guard try run("git", ["rev-parse", "\(requested)^{commit}"], capture: true) == head else {
+        guard try run("git", ["rev-parse", "\(requested)^{commit}"], outputMode: .capture) == head else {
             throw ReleaseError("Requested release tag must identify the checked-out commit")
         }
 
@@ -426,7 +436,7 @@ func prepare() throws {
             guard let suffix = ReleaseContext.suffix(tag) else { continue }
 
             maximum = max(maximum, suffix)
-            if try run("git", ["rev-parse", "\(tag)^{commit}"], capture: true) == head,
+            if try run("git", ["rev-parse", "\(tag)^{commit}"], outputMode: .capture) == head,
                suffix > (matched?.suffix ?? -1)
             {
                 matched = (suffix, tag)
@@ -463,9 +473,8 @@ func importCertificate() throws {
 
 func checkBazel() async throws {
     let version = try required("VERSION")
-    let github = GitHub(repository: "bazelbuild/bazel-central-registry")
-    let (data, status) = try await github.request("repos/\(github.repository)/contents/modules/periphery/metadata.json")
-    guard status != 404 else { throw ReleaseError("Bazel Central Registry metadata does not exist") }
+    let github = GitHub(repository: "bazelbuild/bazel-central-registry", token: environment["GH_TOKEN"])
+    let data = try await github.request("repos/\(github.repository)/contents/modules/periphery/metadata.json")
 
     struct Contents: Decodable { let content: String }
     struct Metadata: Decodable { let versions: [String] }
