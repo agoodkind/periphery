@@ -15,7 +15,7 @@ on:
         type: string
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: macos-26
     outputs:
       exists: ${{ steps.registry.outputs.exists }}
     steps:
@@ -28,7 +28,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.tag_name }}
           BCR_PUBLISH_TOKEN: ${{ secrets.BCR_PUBLISH_TOKEN }}
-        run: bash .github/scripts/check_bazel.sh
+        run: swift .github/scripts/release.swift check-bazel
   publish:
     needs: check
     if: needs.check.outputs.exists != 'true'

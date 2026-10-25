@@ -39,13 +39,13 @@ jobs:
         env:
           SOURCE_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
           REQUESTED_TAG: ${{ inputs.tag }}
-        run: bash workflow-tools/.github/scripts/prepare_release.sh
+        run: swift workflow-tools/.github/scripts/release.swift prepare
 
       - name: Check published release
         id: published
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash workflow-tools/.github/scripts/check_release.sh
+        run: swift workflow-tools/.github/scripts/release.swift check-release
 
       - name: Import signing certificate
         if: steps.published.outputs.exists != 'true'
@@ -55,31 +55,13 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
           CERTIFICATE_PATH: ${{ runner.temp }}/developer-id.p12
           KEYCHAIN_PATH: ${{ runner.temp }}/release.keychain-db
-        run: |
-          set -euo pipefail
-          printf '%s' "$DEVELOPER_ID_APPLICATION_CERTIFICATE" | base64 -D > "$CERTIFICATE_PATH"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" -P "$DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        run: swift workflow-tools/.github/scripts/release.swift import-certificate
 
       - name: Build arm64 executable
         if: steps.published.outputs.exists != 'true'
         env:
           SWIFT_COMMAND: swift
-        run: |
-          set -euo pipefail
-          "$SWIFT_COMMAND" build -c release --arch arm64 --product periphery --scratch-path .build/arm64
-          mkdir -p "release/periphery-${VERSION}"
-          cp .build/arm64/release/periphery "release/periphery-${VERSION}/periphery"
-          SWIFT_PATH=$(xcrun --find swift)
-          TOOLCHAIN_USR=$(dirname "$(dirname "$SWIFT_PATH")")
-          cp "$TOOLCHAIN_USR/lib/libIndexStore.dylib" "release/periphery-${VERSION}/libIndexStore.dylib"
-          test "$(lipo -archs "release/periphery-${VERSION}/periphery")" = "arm64"
-          lipo "release/periphery-${VERSION}/libIndexStore.dylib" -verify_arch arm64
-          test "$("release/periphery-${VERSION}/periphery" version)" = "$VERSION"
+        run: swift workflow-tools/.github/scripts/release.swift build
 
       - name: Sign executable and package artifacts
         if: steps.published.outputs.exists != 'true'
@@ -88,32 +70,7 @@ jobs:
           SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION_SIGNING_IDENTITY }}
           SIGNED_ENTITLEMENTS_PATH: ${{ runner.temp }}/signed-entitlements.plist
           SIGNATURE_DETAILS_PATH: ${{ runner.temp }}/signature-details.txt
-        run: |
-          set -euo pipefail
-          BINARY_PATH="release/periphery-${VERSION}/periphery"
-          LIBRARY_PATH="release/periphery-${VERSION}/libIndexStore.dylib"
-          ZIP_PATH="release/periphery-${VERSION}-macos-arm64.zip"
-          DMG_PATH="release/periphery-${VERSION}-macos-arm64.dmg"
-          EXPECTED_TEAM_ID=$(printf '%s' "$SIGNING_IDENTITY" | sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p')
-          if [[ -z "$EXPECTED_TEAM_ID" ]]; then
-            printf 'Unable to read Team ID from signing identity\n' >&2
-            exit 1
-          fi
-          codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$LIBRARY_PATH"
-          codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS_PATH" --sign "$SIGNING_IDENTITY" "$BINARY_PATH"
-          codesign --verify --deep --strict --verbose=2 "$BINARY_PATH"
-          codesign --verify --strict --verbose=2 "$LIBRARY_PATH"
-          codesign --display --verbose=4 "$BINARY_PATH" 2>&1 | tee "$SIGNATURE_DETAILS_PATH"
-          grep -Fq "TeamIdentifier=${EXPECTED_TEAM_ID}" "$SIGNATURE_DETAILS_PATH"
-          grep -Eq '^Timestamp=' "$SIGNATURE_DETAILS_PATH"
-          grep -Eq '^CodeDirectory .* flags=.*runtime' "$SIGNATURE_DETAILS_PATH"
-          codesign --display --entitlements - "$BINARY_PATH" 2>&1 | tee "$SIGNED_ENTITLEMENTS_PATH"
-          grep -Fq 'com.apple.security.cs.disable-library-validation' "$SIGNED_ENTITLEMENTS_PATH"
-          "$BINARY_PATH" version
-          ditto -c -k --sequesterRsrc --keepParent "release/periphery-${VERSION}" "$ZIP_PATH"
-          hdiutil create -volname "Periphery ${VERSION}" -srcfolder "release/periphery-${VERSION}" -format UDZO "$DMG_PATH"
-          codesign --force --timestamp --sign "$SIGNING_IDENTITY" "$DMG_PATH"
-          codesign --verify --strict --verbose=2 "$DMG_PATH"
+        run: swift workflow-tools/.github/scripts/release.swift package
 
       - name: Notarize and staple disk image
         if: steps.published.outputs.exists != 'true'
@@ -122,32 +79,18 @@ jobs:
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
           NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
           NOTARY_KEY_PATH: ${{ runner.temp }}/notary-key.p8
-        run: |
-          set -euo pipefail
-          DMG_PATH="release/periphery-${VERSION}-macos-arm64.dmg"
-          printf '%s' "$NOTARY_KEY" > "$NOTARY_KEY_PATH"
-          xcrun notarytool submit "$DMG_PATH" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
-          xcrun stapler staple "$DMG_PATH"
-          xcrun stapler validate "$DMG_PATH"
-          spctl --assess --type open --context context:primary-signature -v "$DMG_PATH"
+        run: swift workflow-tools/.github/scripts/release.swift notarize
 
-      - name: Package Bazel source and create checksums
+      - name: Create checksums
         if: steps.published.outputs.exists != 'true'
-        run: |
-          set -euo pipefail
-          bash workflow-tools/.github/scripts/package_bazel.sh "$VERSION" release "$PWD"
-          cp scripts/install.sh release/install.sh
-          (
-            cd release
-            shasum -a 256 "periphery-${VERSION}-macos-arm64.zip" "periphery-${VERSION}-macos-arm64.dmg" "periphery-bazel-${VERSION}.zip" install.sh > checksums.txt
-          )
+        run: swift workflow-tools/.github/scripts/release.swift checksums
 
       - name: Publish release assets
         if: steps.published.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ steps.prepare.outputs.source_sha }}
-        run: bash workflow-tools/.github/scripts/publish_release.sh
+        run: swift workflow-tools/.github/scripts/release.swift publish
 
       - uses: actions/upload-artifact@v4
         if: steps.published.outputs.exists != 'true'
@@ -166,7 +109,7 @@ jobs:
       - name: Download published archive
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash .github/scripts/download_release.sh
+        run: swift .github/scripts/release.swift download
 
       - name: Check out Homebrew tap
         uses: actions/checkout@v4
@@ -179,27 +122,7 @@ jobs:
         env:
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           SIGNING_KEY_PATH: ${{ runner.temp }}/homebrew-tap-deploy-key
-        run: |
-          set -euo pipefail
-          trap 'rm -f "$SIGNING_KEY_PATH"' EXIT
-          FORMULA_PATH="homebrew-tap/Formula/periphery.rb"
-          ZIP_PATH="release/periphery-${VERSION}-macos-arm64.zip"
-          ZIP_SHA=$(shasum -a 256 "$ZIP_PATH" | awk '{ print $1 }')
-          ruby .github/scripts/update_homebrew_formula.rb "$FORMULA_PATH" "$VERSION" "$ZIP_SHA"
-          ruby -c "$FORMULA_PATH"
-          printf '%s' "$HOMEBREW_TAP_DEPLOY_KEY" > "$SIGNING_KEY_PATH"
-          chmod 600 "$SIGNING_KEY_PATH"
-          git -C homebrew-tap config user.name "Periphery release automation"
-          git -C homebrew-tap config user.email "noreply@agoodkind.io"
-          git -C homebrew-tap config gpg.format ssh
-          git -C homebrew-tap config user.signingkey "$SIGNING_KEY_PATH"
-          git -C homebrew-tap add Formula/periphery.rb
-          if git -C homebrew-tap diff --cached --quiet; then
-            printf 'Homebrew formula already matches %s\n' "$VERSION"
-            exit 0
-          fi
-          git -C homebrew-tap commit -S -m "Update Periphery to ${VERSION}"
-          git -C homebrew-tap push origin HEAD:main
+        run: swift .github/scripts/release.swift homebrew
 
   bazel:
     needs: build
