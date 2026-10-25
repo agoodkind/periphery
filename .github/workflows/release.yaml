@@ -1,45 +1,54 @@
 name: Build release artifacts
 
 on:
+  push:
+    branches: [preserved-free-offline]
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to build and publish
-        required: true
+        description: Existing release tag to retry, or leave empty for a new release
+        required: false
         type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: periphery-release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: macos-26
-    env:
-      VERSION: 3.8.0-agoodkind.2
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.sha }}
           fetch-depth: 0
 
-      - name: Verify release tag
+      - name: Check out release tools
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: workflow-tools
+
+      - name: Prepare release version
+        id: prepare
         env:
-          TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          if [[ "${TAG}" != "${VERSION}" ]]; then
-            printf 'Release tag %s does not match version %s\n' "${TAG}" "${VERSION}" >&2
-            exit 1
-          fi
-          git show-ref --verify --quiet "refs/tags/${TAG}"
-          TAG_COMMIT=$(git rev-parse "${TAG}^{commit}")
-          HEAD_COMMIT=$(git rev-parse HEAD)
-          if [[ "${HEAD_COMMIT}" != "${TAG_COMMIT}" ]]; then
-            printf 'Checked-out commit does not match tag %s\n' "${TAG}" >&2
-            exit 1
-          fi
+          SOURCE_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: bash workflow-tools/.github/scripts/prepare_release.sh
+
+      - name: Check published release
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash workflow-tools/.github/scripts/check_release.sh
 
       - name: Import signing certificate
+        if: steps.published.outputs.exists != 'true'
         env:
           DEVELOPER_ID_APPLICATION_CERTIFICATE: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE }}
           DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
@@ -57,6 +66,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
       - name: Build arm64 executable
+        if: steps.published.outputs.exists != 'true'
         env:
           SWIFT_COMMAND: swift
         run: |
@@ -69,9 +79,10 @@ jobs:
           cp "$TOOLCHAIN_USR/lib/libIndexStore.dylib" "release/periphery-${VERSION}/libIndexStore.dylib"
           test "$(lipo -archs "release/periphery-${VERSION}/periphery")" = "arm64"
           lipo "release/periphery-${VERSION}/libIndexStore.dylib" -verify_arch arm64
-          "release/periphery-${VERSION}/periphery" version
+          test "$("release/periphery-${VERSION}/periphery" version)" = "$VERSION"
 
       - name: Sign executable and package artifacts
+        if: steps.published.outputs.exists != 'true'
         env:
           ENTITLEMENTS_PATH: release.entitlements
           SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION_SIGNING_IDENTITY }}
@@ -105,6 +116,7 @@ jobs:
           codesign --verify --strict --verbose=2 "$DMG_PATH"
 
       - name: Notarize and staple disk image
+        if: steps.published.outputs.exists != 'true'
         env:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
@@ -119,34 +131,42 @@ jobs:
           xcrun stapler validate "$DMG_PATH"
           spctl --assess --type open --context context:primary-signature -v "$DMG_PATH"
 
-      - name: Create checksums
+      - name: Package Bazel source and create checksums
+        if: steps.published.outputs.exists != 'true'
         run: |
           set -euo pipefail
+          bash workflow-tools/.github/scripts/package_bazel.sh "$VERSION" release "$PWD"
           cp scripts/install.sh release/install.sh
           (
             cd release
-            shasum -a 256 "periphery-${VERSION}-macos-arm64.zip" "periphery-${VERSION}-macos-arm64.dmg" install.sh > checksums.txt
+            shasum -a 256 "periphery-${VERSION}-macos-arm64.zip" "periphery-${VERSION}-macos-arm64.dmg" "periphery-bazel-${VERSION}.zip" install.sh > checksums.txt
           )
 
       - name: Publish release assets
+        if: steps.published.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          ASSETS=(
-            "release/periphery-${VERSION}-macos-arm64.zip" \
-            "release/periphery-${VERSION}-macos-arm64.dmg" \
-            "release/install.sh#install.sh" \
-            "release/checksums.txt"
-          )
-          if EXISTING_TAG=$(gh release view "$TAG" --json tagName --jq .tagName); then
-            printf 'Updating existing release %s\n' "$EXISTING_TAG"
-            gh release upload "$TAG" --clobber "${ASSETS[@]}"
-          else
-            printf 'Creating release %s\n' "$TAG"
-            gh release create --verify-tag "$TAG" --title "Periphery $VERSION" --generate-notes "${ASSETS[@]}"
-          fi
+          SOURCE_SHA: ${{ steps.prepare.outputs.source_sha }}
+        run: bash workflow-tools/.github/scripts/publish_release.sh
+
+      - uses: actions/upload-artifact@v4
+        if: steps.published.outputs.exists != 'true'
+        with:
+          name: periphery-${{ env.VERSION }}
+          path: release/*.*
+
+  homebrew:
+    needs: build
+    runs-on: macos-26
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download published archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/download_release.sh
 
       - name: Check out Homebrew tap
         uses: actions/checkout@v4
@@ -181,11 +201,10 @@ jobs:
           git -C homebrew-tap commit -S -m "Update Periphery to ${VERSION}"
           git -C homebrew-tap push origin HEAD:main
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: periphery-${{ env.VERSION }}
-          path: |
-            release/periphery-${{ env.VERSION }}-macos-arm64.zip
-            release/periphery-${{ env.VERSION }}-macos-arm64.dmg
-            release/install.sh
-            release/checksums.txt
+  bazel:
+    needs: build
+    uses: ./.github/workflows/publish.yaml
+    with:
+      tag_name: ${{ needs.build.outputs.version }}
+    secrets:
+      BCR_PUBLISH_TOKEN: ${{ secrets.BCR_PUBLISH_TOKEN }}
