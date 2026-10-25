@@ -81,6 +81,7 @@ public final class ShellImpl: Shell {
 
         logger.debug("\(cmd.joined(separator: " "))")
         store.add(process)
+        defer { store.remove(process) }
 
         var stdoutPipe: Pipe?
         var stderrPipe: Pipe?
@@ -97,10 +98,22 @@ public final class ShellImpl: Shell {
         var standardOutput = ""
         var standardError = ""
 
-        if let stdoutData = try stdoutPipe?.fileHandleForReading.readToEnd() {
+        let handles = [stdoutPipe?.fileHandleForReading, stderrPipe?.fileHandleForReading]
+        let results = Mutex<[Result<Data?, Error>]>([.success(nil), .success(nil)])
+        let reads = DispatchGroup()
+        for (index, handle) in handles.enumerated() {
+            DispatchQueue.global().async(group: reads) {
+                let result = Result { try handle?.readToEnd() }
+                results.withLock { $0[index] = result }
+            }
+        }
+        reads.wait()
+
+        process.waitUntilExit()
+
+        if let stdoutData = try results.withLock({ try $0[0].get() }) {
             guard let stdoutStr = String(data: stdoutData, encoding: .utf8)
             else {
-                store.remove(process)
                 throw PeripheryError.shellOutputEncodingFailed(
                     cmd: cmd,
                     encoding: .utf8
@@ -110,10 +123,9 @@ public final class ShellImpl: Shell {
             standardOutput = stdoutStr
         }
 
-        if let stderrData = try stderrPipe?.fileHandleForReading.readToEnd() {
+        if let stderrData = try results.withLock({ try $0[1].get() }) {
             guard let stderrStr = String(data: stderrData, encoding: .utf8)
             else {
-                store.remove(process)
                 throw PeripheryError.shellOutputEncodingFailed(
                     cmd: cmd,
                     encoding: .utf8
@@ -123,8 +135,6 @@ public final class ShellImpl: Shell {
             standardError = stderrStr
         }
 
-        process.waitUntilExit()
-        store.remove(process)
         return (process.terminationStatus, standardOutput, standardError)
     }
 }
