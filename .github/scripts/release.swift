@@ -65,9 +65,8 @@ func run(_ executable: String, _ arguments: [String], at directory: URL? = nil,
     return ""
 }
 
-func append(_ value: String, to variable: String) throws {
-    let path = try required(variable)
-    let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: path))
+func append(_ value: String, to url: URL) throws {
+    let handle = try FileHandle(forWritingTo: url)
     defer { try? handle.close() }
     try handle.seekToEnd()
     try handle.write(contentsOf: Data(value.utf8))
@@ -103,14 +102,25 @@ func checksum(_ url: URL) throws -> String {
 struct Asset: Decodable {
     let id: Int
     let name: String
-    let browser_download_url: URL
+    let downloadURL: URL
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case downloadURL = "browser_download_url"
+    }
 }
 
 struct GitHubRelease: Decodable {
     let id: Int
-    let tag_name: String
-    let draft: Bool
+    let tagName: String
+    let isDraft: Bool
     let assets: [Asset]
+
+    enum CodingKeys: String, CodingKey {
+        case id, assets
+        case tagName = "tag_name"
+        case isDraft = "draft"
+    }
 }
 
 struct Entitlements: Decodable {
@@ -169,7 +179,7 @@ struct GitHub {
             let data = try await request("repos/\(repository)/releases?per_page=100&page=\(page)")
 
             let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
-            if let release = releases.first(where: { $0.tag_name == version }) { return release }
+            if let release = releases.first(where: { $0.tagName == version }) { return release }
             if releases.count < 100 { return nil }
             page += 1
         }
@@ -186,13 +196,13 @@ struct ReleaseContext {
     let directory: URL
     let github: GitHub
 
-    init() throws {
-        version = try required("VERSION")
+    init(version: String, root: URL, github: GitHub) throws {
         guard Self.suffix(version) != nil else { throw ReleaseError("VERSION must match 3.8.0-agoodkind.N") }
 
-        root = URL(fileURLWithPath: files.currentDirectoryPath, isDirectory: true)
+        self.version = version
+        self.root = root
+        self.github = github
         directory = root.appendingPathComponent("release", isDirectory: true)
-        github = try GitHub(repository: required("GITHUB_REPOSITORY"), token: environment["GH_TOKEN"])
     }
 
     static func suffix(_ tag: String) -> Int? {
@@ -213,15 +223,15 @@ struct ReleaseContext {
     }
 
     func checkRelease() async throws {
-        if let release = try await github.release(version), !release.draft {
+        if let release = try await github.release(version), !release.isDraft {
             let names = Set(release.assets.map(\.name))
             for name in assetNames where !names.contains(name) {
                 throw ReleaseError("Published release \(version) lacks \(name). Dispatch with an empty tag to create a complete release.")
             }
-            try append("exists=true\n", to: "GITHUB_OUTPUT")
+            try append("exists=true\n", to: URL(fileURLWithPath: required("GITHUB_OUTPUT")))
             print("Reusing published release \(version)")
         } else {
-            try append("exists=false\n", to: "GITHUB_OUTPUT")
+            try append("exists=false\n", to: URL(fileURLWithPath: required("GITHUB_OUTPUT")))
         }
     }
 
@@ -307,7 +317,7 @@ struct ReleaseContext {
         try run("git", ["push", "origin", "refs/tags/\(version)"])
         let release: GitHubRelease
         if let existing = try await github.release(version) {
-            guard existing.draft else { throw ReleaseError("Published release assets cannot change") }
+            guard existing.isDraft else { throw ReleaseError("Published release assets cannot change") }
 
             release = existing
         } else {
@@ -334,7 +344,7 @@ struct ReleaseContext {
     }
 
     func download() async throws {
-        guard let release = try await github.release(version), !release.draft else {
+        guard let release = try await github.release(version), !release.isDraft else {
             throw ReleaseError("Published release \(version) does not exist")
         }
 
@@ -344,7 +354,7 @@ struct ReleaseContext {
                 throw ReleaseError("Release \(version) lacks \(name)")
             }
 
-            let (temporary, response) = try await URLSession.shared.download(from: asset.browser_download_url)
+            let (temporary, response) = try await URLSession.shared.download(from: asset.downloadURL)
             guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
                 throw ReleaseError("Cannot download release asset \(name)")
             }
@@ -435,8 +445,8 @@ func prepare() throws {
     let root = URL(fileURLWithPath: files.currentDirectoryPath)
     try replace(#"^let PeripheryVersion = ".*"$"#, with: "let PeripheryVersion = \"\(version)\"", in: root.appendingPathComponent("Sources/Frontend/Version.swift"))
     try replace("^VERSION=.*$", with: "VERSION=\(version)", in: root.appendingPathComponent("scripts/install.sh"))
-    try append("version=\(version)\nsource_sha=\(head)\n", to: "GITHUB_OUTPUT")
-    try append("VERSION=\(version)\n", to: "GITHUB_ENV")
+    try append("version=\(version)\nsource_sha=\(head)\n", to: URL(fileURLWithPath: required("GITHUB_OUTPUT")))
+    try append("VERSION=\(version)\n", to: URL(fileURLWithPath: required("GITHUB_ENV")))
 }
 
 func importCertificate() throws {
@@ -465,7 +475,10 @@ do {
     case "prepare": try prepare()
     case "import-certificate": try importCertificate()
     default:
-        let context = try ReleaseContext()
+        let github = try GitHub(repository: required("GITHUB_REPOSITORY"), token: environment["GH_TOKEN"])
+        let context = try ReleaseContext(version: required("VERSION"),
+                                         root: URL(fileURLWithPath: files.currentDirectoryPath, isDirectory: true),
+                                         github: github)
         switch command {
         case "check-release": try await context.checkRelease()
         case "build": try context.build()
