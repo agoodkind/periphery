@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Feature requests
+    url: https://github.com/tiny-earth-moon/periphery/blob/master/CONTRIBUTING.md
+    about: This fork has no functional roadmap. Feature requests - open a PR.
