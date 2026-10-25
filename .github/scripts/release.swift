@@ -209,7 +209,7 @@ struct ReleaseContext {
     var diskImage: URL { directory.appendingPathComponent("periphery-\(version)-macos-arm64.dmg") }
     var product: URL { directory.appendingPathComponent("periphery-\(version)", isDirectory: true) }
     var assetNames: [String] {
-        [archiveName, diskImage.lastPathComponent, "periphery-bazel-\(version).zip", "install.sh", "checksums.txt"]
+        [archiveName, diskImage.lastPathComponent, "install.sh", "checksums.txt"]
     }
 
     func checkRelease() async throws {
@@ -243,19 +243,6 @@ struct ReleaseContext {
         }
     }
 
-    func packageBazel() throws {
-        let staging = files.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try files.createDirectory(at: staging, withIntermediateDirectories: true)
-        defer { try? files.removeItem(at: staging) }
-        for name in ["LICENSE.md", "BUILD.bazel", "MODULE.bazel", "bazel", "Sources"] {
-            try files.copyItem(at: root.appendingPathComponent(name), to: staging.appendingPathComponent(name))
-        }
-        try files.removeItem(at: staging.appendingPathComponent("bazel/dev"))
-        try replace(#"^    version = "[^"]*",$"#, with: "    version = \"\(version)\",", in: staging.appendingPathComponent("MODULE.bazel"))
-        try files.createDirectory(at: directory, withIntermediateDirectories: true)
-        try run("zip", ["-qr", directory.appendingPathComponent("periphery-bazel-\(version).zip").path, "LICENSE.md", "MODULE.bazel", "BUILD.bazel", "bazel", "Sources"], at: staging)
-    }
-
     func package() throws {
         let identity = try required("SIGNING_IDENTITY")
         guard let match = identity.range(of: #"\([A-Z0-9]{10}\)$"#, options: .regularExpression) else {
@@ -287,7 +274,6 @@ struct ReleaseContext {
         try run("hdiutil", ["create", "-volname", "Periphery \(version)", "-srcfolder", product.path, "-format", "UDZO", diskImage.path])
         try run("codesign", ["--force", "--timestamp", "--sign", identity, diskImage.path])
         try run("codesign", ["--verify", "--strict", "--verbose=2", diskImage.path])
-        try packageBazel()
     }
 
     func notarize() throws {
@@ -471,31 +457,6 @@ func importCertificate() throws {
     try run("security", ["set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", password, keychain])
 }
 
-func checkBazel() async throws {
-    let version = try required("VERSION")
-    let github = GitHub(repository: "bazelbuild/bazel-central-registry", token: environment["GH_TOKEN"])
-    let data = try await github.request("repos/\(github.repository)/contents/modules/periphery/metadata.json")
-
-    struct Contents: Decodable { let content: String }
-    struct Metadata: Decodable { let versions: [String] }
-    let contents = try JSONDecoder().decode(Contents.self, from: data)
-    guard let decoded = Data(base64Encoded: contents.content, options: .ignoreUnknownCharacters) else {
-        throw ReleaseError("Bazel Central Registry metadata has invalid base64 encoding")
-    }
-
-    let metadata = try JSONDecoder().decode(Metadata.self, from: decoded)
-    if metadata.versions.contains(version) {
-        try append("exists=true\n", to: "GITHUB_OUTPUT")
-        print("Bazel Central Registry already includes \(version)")
-    } else {
-        guard let token = environment["BCR_PUBLISH_TOKEN"], !token.isEmpty else {
-            throw ReleaseError("Configure the BCR_PUBLISH_TOKEN Actions secret with a dedicated classic token with repo and workflow scopes")
-        }
-
-        try append("exists=false\n", to: "GITHUB_OUTPUT")
-    }
-}
-
 do {
     guard CommandLine.arguments.count == 2 else { throw ReleaseError("Usage: swift release.swift COMMAND") }
 
@@ -503,14 +464,12 @@ do {
     switch command {
     case "prepare": try prepare()
     case "import-certificate": try importCertificate()
-    case "check-bazel": try await checkBazel()
     default:
         let context = try ReleaseContext()
         switch command {
         case "check-release": try await context.checkRelease()
         case "build": try context.build()
         case "package": try context.package()
-        case "package-bazel": try context.packageBazel()
         case "notarize": try context.notarize()
         case "checksums": try context.checksums()
         case "publish": try await context.publish()

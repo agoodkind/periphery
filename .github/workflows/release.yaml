@@ -123,11 +123,3 @@ jobs:
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           SIGNING_KEY_PATH: ${{ runner.temp }}/homebrew-tap-deploy-key
         run: swift .github/scripts/release.swift homebrew
-
-  bazel:
-    needs: build
-    uses: ./.github/workflows/publish.yaml
-    with:
-      tag_name: ${{ needs.build.outputs.version }}
-    secrets:
-      BCR_PUBLISH_TOKEN: ${{ secrets.BCR_PUBLISH_TOKEN }}
