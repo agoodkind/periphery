@@ -12,6 +12,22 @@
 
 - None.
 
+## 3.8.1 (2026-10-25)
+
+Maintained fork (tiny-earth-moon/periphery) of the archived peripheryapp/periphery.
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- None. Maintained fork: builds with Xcode 27.1 / Swift 6.4; no functional change.
+
+##### Bug Fixes
+
+- None.
+
 ## 3.8.0 (2026-07-25)
 
 ##### Breaking
