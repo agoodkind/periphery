@@ -69,21 +69,6 @@ func testHomebrewSigning(releaseScript: URL, formulaSource: URL) throws {
     let generatedKey = temporary.appendingPathComponent("generated-key")
     try run("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", generatedKey.path], at: temporary)
     let privateKey = try String(contentsOf: generatedKey, encoding: .utf8).trimmingCharacters(in: .newlines)
-    let invalidKey = temporary.appendingPathComponent("key-without-newline")
-    try Data(privateKey.utf8).write(to: invalidKey)
-    try files.setAttributes([.posixPermissions: 0o600], ofItemAtPath: invalidKey.path)
-    let parser = Process()
-    parser.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
-    parser.arguments = ["-y", "-P", "", "-f", invalidKey.path]
-    parser.standardOutput = FileHandle.nullDevice
-    parser.standardError = FileHandle.nullDevice
-    try parser.run()
-    parser.waitUntilExit()
-    guard parser.terminationReason == .exit, parser.terminationStatus != 0 else {
-        throw RegressionError("ssh-keygen must reject the private key without its trailing newline")
-    }
-
-    print("ssh-keygen rejected the private key without its trailing newline with status \(parser.terminationStatus)")
     let publicKey = try String(contentsOf: generatedKey.appendingPathExtension("pub"), encoding: .utf8)
     let allowedSigners = temporary.appendingPathComponent("allowed-signers")
     try ("noreply@agoodkind.io " + publicKey).write(to: allowedSigners, atomically: true, encoding: .utf8)

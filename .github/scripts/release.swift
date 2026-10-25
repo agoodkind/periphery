@@ -377,7 +377,7 @@ struct ReleaseContext {
         let tap = root.appendingPathComponent("homebrew-tap", isDirectory: true)
         let formula = tap.appendingPathComponent("Formula/periphery.rb")
         let digest = try checksum(directory.appendingPathComponent(archiveName))
-        let url = "https://github.com/agoodkind/periphery/releases/download/\(version)/\(archiveName)"
+        let url = "https://github.com/\(github.repository)/releases/download/\(version)/\(archiveName)"
         try replace(#"^  url ".*"$"#, with: "  url \"\(url)\"", in: formula)
         try replace(#"^  version ".*"$"#, with: "  version \"\(version)\"", in: formula)
         try replace(#"^  sha256 ".*"$"#, with: "  sha256 \"\(digest)\"", in: formula)
