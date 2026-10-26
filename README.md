@@ -2,19 +2,11 @@
 >
 > This is a maintained fork of [peripheryapp/periphery](https://github.com/peripheryapp/periphery), archived in August 2026. Scope: keep Periphery building and working with current Xcode/Swift toolchains, fix regressions, review community PRs. No functional roadmap.
 >
-> Install: `brew install tiny-earth-moon/tap/periphery` (tap to come) or build from source (`swift build -c release --product periphery`).
+> Install: `brew install tiny-earth-moon/tap/periphery` (builds from source) or `swift build -c release --product periphery`. Issues and pull requests: this repository.
+>
+> The original author now develops [Periphery Pro](https://periphery.pro), a separate closed-source product. This fork takes nothing from it; both install a `periphery` executable, so install one or the other (the Homebrew formulae conflict on purpose).
 >
 > Periphery was created by [Ian Leitch](https://github.com/ileitch), whom we thank for years of excellent work and for keeping the project open source.
-
-> [!IMPORTANT]
->
-> Periphery has transitioned from an open-source project to a commercial product. This change will support the continued maintenance of Periphery and the development of more advanced features.
->
-> This repository is preserved as a historical record of the original open-source project and will remain available for anyone who wishes to fork and continue building upon it.
->
-> All existing issues have been migrated to the new [issue tracker](https://github.com/periphery-pro/issues). Please use that repository to browse existing issues or report a new one.
->
-> **[Read more about the transition.](https://periphery.pro/a-new-chapter)**
 
 <br>
 
