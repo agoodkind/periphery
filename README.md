@@ -52,6 +52,7 @@
     - [Assign-only Properties](#assign-only-properties)
     - [Redundant Public Accessibility](#redundant-public-accessibility)
     - [Unused Imports](#unused-imports)
+    - [Platform Conditionals](#platform-conditionals)
     - [Objective-C](#objective-c)
     - [Codable](#codable)
     - [Equatable and Hashable](#equatable-and-hashable)
@@ -321,6 +322,15 @@ This analysis can be disabled with `--disable-redundant-public-analysis`.
 Periphery can only detect unused imports of targets it has scanned. It cannot detect unused imports of other targets because the Swift source files are unavailable and uses of `@_exported` cannot be observed. `@_exported` is problematic because it changes the public interface of a target such that the declarations exported by the target are no longer necessarily declared by the imported target. For example, the `Foundation` target exports `Dispatch`, among other targets. If any given source file imports `Foundation` and references `DispatchQueue` but no other declarations from `Foundation`, then the `Foundation` import cannot be removed as it would also make the `DispatchQueue` type unavailable. To avoid false positives, therefore, Periphery only detects unused imports of targets it has scanned.
 
 Periphery will likely produce false positives for targets with mixed Swift and Objective-C, as Periphery cannot scan the Objective-C files. It is recommended, therefore, to disable unused import detection for projects with a significant amount of Objective-C or manually exclude the mixed language targets from the results.
+
+### Platform Conditionals
+
+The index store only describes the platform Periphery built for, so code that is only used on another platform would be reported as unused. To avoid these false positives, Periphery retains:
+
+- Declarations marked `@available(<platform>, unavailable)` (e.g. `@available(tvOS, unavailable)`), along with their members. `@available(*, unavailable)`, `swift` and `*ApplicationExtension` platforms are not affected.
+- Declarations whose name is written inside an `#if` block conditioned on `os()`, `targetEnvironment()`, `arch()` or `canImport()`, including its `#else` branches. Matching is done by name on the syntax tree, so unrelated declarations that share the name are retained too.
+
+This can be disabled with `--disable-platform-conditional-retention`. Other conditions, such as `#if DEBUG`, are not covered, see [Code referenced within a preprocessor macro conditional branch is unused](#code-referenced-within-a-preprocessor-macro-conditional-branch-is-unused).
 
 ### Objective-C
 

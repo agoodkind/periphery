@@ -46,6 +46,7 @@ public final class SourceGraphMutatorRunner {
         CodablePropertyRetainer.self,
         EquatableHashablePropertyRetainer.self,
         ExternalOverrideRetainer.self,
+        PlatformConditionalRetainer.self,
 
         AncestralReferenceEliminator.self,
         AssignOnlyPropertyReferenceEliminator.self,

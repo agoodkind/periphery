@@ -373,6 +373,42 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsDeclarationsUnavailableOnPlatform() {
+        analyze(retainPublic: true) {
+            assertReferenced(.class("FixtureClass223")) {
+                self.assertReferenced(.functionMethodInstance("unavailableOnIOS()"))
+                self.assertReferenced(.functionMethodInstance("unavailableOnMacOS()"))
+                self.assertReferenced(.functionMethodInstance("unavailableOnTvOS()"))
+                self.assertNotReferenced(.functionMethodInstance("introducedOnMacOS()"))
+                self.assertNotReferenced(.functionMethodInstance("unusedMethod()"))
+            }
+            assertReferenced(.class("FixtureClass224")) {
+                self.assertReferenced(.functionMethodInstance("someMethod()"))
+            }
+        }
+    }
+
+    func testRetainsDeclarationsReferencedInPlatformConditionalBlocks() {
+        analyze(retainPublic: true) {
+            assertReferenced(.class("FixtureClass225")) {
+                self.assertReferenced(.functionMethodInstance("onlyUsedOnIOS()"))
+                self.assertReferenced(.varInstance("onlyUsedOnIOSProperty"))
+                self.assertReferenced(.functionMethodInstance("onlyUsedOnWindows()"))
+                self.assertNotReferenced(.functionMethodInstance("onlyUsedUnderCustomFlag()"))
+                self.assertNotReferenced(.functionMethodInstance("unusedMethod()"))
+            }
+        }
+    }
+
+    func testDoesNotRetainPlatformConditionalDeclarationsWhenDisabled() {
+        analyze(retainPublic: true, disablePlatformConditionalRetention: true) {
+            assertReferenced(.class("FixtureClass226")) {
+                self.assertNotReferenced(.functionMethodInstance("unavailableOnIOS()"))
+                self.assertNotReferenced(.functionMethodInstance("onlyUsedOnIOS()"))
+            }
+        }
+    }
+
     func testRetainsDefaultConstructor() {
         analyze(retainPublic: true) {
             assertReferenced(.class("FixtureClass41")) {

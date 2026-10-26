@@ -60,6 +60,9 @@ struct ScanCommand: ParsableCommand {
     @Option(parsing: .upToNextOption, help: "Public SPIs (System Programming Interfaces) to check for unused code even when '--retain-public' is enabled")
     var noRetainSPI: [String] = defaultConfiguration.$noRetainSPI.defaultValue
 
+    @Flag(help: "Disable retention of declarations that are unavailable on a platform, or referenced from platform conditional compilation blocks")
+    var disablePlatformConditionalRetention: Bool = defaultConfiguration.$disablePlatformConditionalRetention.defaultValue
+
     @Flag(help: "Disable identification of redundant public accessibility")
     var disableRedundantPublicAnalysis: Bool = defaultConfiguration.$disableRedundantPublicAnalysis.defaultValue
 
@@ -202,6 +205,7 @@ struct ScanCommand: ParsableCommand {
         configuration.apply(\.$retainUnusedProtocolFuncParams, retainUnusedProtocolFuncParams)
         configuration.apply(\.$retainSwiftUIPreviews, retainSwiftUIPreviews)
         configuration.apply(\.$disableRedundantPublicAnalysis, disableRedundantPublicAnalysis)
+        configuration.apply(\.$disablePlatformConditionalRetention, disablePlatformConditionalRetention)
         configuration.apply(\.$disableUnusedImportAnalysis, disableUnusedImportAnalysis)
         configuration.apply(\.$superfluousIgnoreComments, superfluousIgnoreComments)
         configuration.apply(\.$retainUnusedImportedModules, retainUnusedImportedModules)

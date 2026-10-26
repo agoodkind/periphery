@@ -280,6 +280,14 @@ final class SwiftIndexer: Indexer {
                 }
             }
 
+            if !configuration.disablePlatformConditionalRetention {
+                let names = PlatformConditionalNameCollector.collect(from: multiplexingSyntaxVisitor.syntax)
+
+                if !names.isEmpty {
+                    graph.withLock { $0.addPlatformConditionalNames(names) }
+                }
+            }
+
             associateLatentReferences()
             associateDanglingReferences()
             visitDeclarations(using: declarationSyntaxVisitor)
