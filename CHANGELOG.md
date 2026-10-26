@@ -10,7 +10,7 @@
 
 ##### Bug Fixes
 
-- None.
+- Retain declarations marked `@available(<platform>, unavailable)` and declarations referenced only inside platform-conditional `#if` blocks (`os`, `targetEnvironment`, `arch`, `canImport`); opt out with `--disable-platform-conditional-retention`. Fixes #14.
 
 ## 3.8.2 (2026-10-26)
 
