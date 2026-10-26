@@ -23,6 +23,7 @@ public final class SourceGraph {
     public private(set) var extensions: [Declaration: Set<Declaration>] = [:]
     public private(set) var commandIgnoredDeclarations: [Declaration: CommandIgnoreKind] = [:]
     public private(set) var functionsWithIgnoredParameters: Set<Declaration> = []
+    public private(set) var platformConditionalNames: Set<String> = []
 
     private var indexedModules: Set<String> = []
     private var unindexedExportedModules: Set<String> = []
@@ -239,6 +240,10 @@ public final class SourceGraph {
 
     public func addIndexedSourceFile(_ file: SourceFile) {
         indexedSourceFiles.append(file)
+    }
+
+    public func addPlatformConditionalNames(_ names: Set<String>) {
+        platformConditionalNames.formUnion(names)
     }
 
     public func addIndexedModules(_ modules: Set<String>) {
