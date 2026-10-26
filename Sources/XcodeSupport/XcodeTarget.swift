@@ -23,19 +23,7 @@ public final class XcodeTarget {
     }
 
     public func identifyFiles() throws {
-        let sourceRoot = project.sourceRoot.lexicallyNormalized()
-        let rootFileSystemFiles = try project.xcodeProject.pbxproj.fileSystemSynchronizedRootGroups.flatMapSet {
-            if let stringPath = try $0.fullPath(sourceRoot: sourceRoot.string) {
-                let path = FilePath(stringPath)
-                return FilePath.glob(path.appending("**/*").string)
-            }
-
-            return []
-        }
-
-        try identifyFiles(in: rootFileSystemFiles)
-        try identifyFiles(in: rootFileSystemFiles)
-        try identifyFiles(in: rootFileSystemFiles)
+        try identifyFiles(in: synchronizedGroupFiles())
 
         let sourcesBuildPhases = project.xcodeProject.pbxproj.sourcesBuildPhases
         let resourcesBuildPhases = project.xcodeProject.pbxproj.resourcesBuildPhases
@@ -51,6 +39,27 @@ public final class XcodeTarget {
     }
 
     // MARK: - Private
+
+    /// Files of the file system synchronized groups (Xcode 16+) belonging to this target, minus the files the
+    /// target is excluded from via `membershipExceptions`.
+    private func synchronizedGroupFiles() throws -> Set<FilePath> {
+        let sourceRoot = project.sourceRoot.lexicallyNormalized()
+
+        return try (target.fileSystemSynchronizedGroups ?? []).flatMapSet { group in
+            guard let stringPath = try group.fullPath(sourceRoot: sourceRoot.string) else { return [] }
+
+            let groupPath = FilePath(stringPath).lexicallyNormalized()
+            let exceptions = (group.exceptions ?? [])
+                .compactMap { $0 as? PBXFileSystemSynchronizedBuildFileExceptionSet }
+                .filter { $0.target === target }
+                .flatMap { $0.membershipExceptions ?? [] }
+            let excludedPaths = exceptions.mapSet { groupPath.appending($0).lexicallyNormalized() }
+
+            return FilePath.glob(groupPath.appending("**/*").string).filter { path in
+                !excludedPaths.contains { path == $0 || path.starts(with: $0) }
+            }
+        }
+    }
 
     private func identifyFiles(kind: ProjectFileKind, in buildPhases: [PBXBuildPhase]) throws {
         let targetPhases = buildPhases.filter { target.buildPhases.contains($0) }
@@ -72,8 +81,11 @@ public final class XcodeTarget {
     }
 
     private func identifyFiles(in paths: Set<FilePath>) throws {
+        // Info.plist files are located exclusively through the INFOPLIST_FILE build setting.
+        let kinds = ProjectFileKind.allCases.filter { $0 != .infoPlist }
+
         for path in paths {
-            for kind in ProjectFileKind.allCases {
+            for kind in kinds {
                 if let ext = path.extension, kind.extensions.contains(ext.lowercased()) {
                     files[kind, default: []].insert(path)
                 }
