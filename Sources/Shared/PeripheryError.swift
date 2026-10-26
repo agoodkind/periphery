@@ -18,6 +18,7 @@ public enum PeripheryError: Error, LocalizedError, CustomStringConvertible {
     case swiftVersionUnsupportedError(version: String, minimumVersion: String)
     case jsonDeserializationError(error: Error, json: String)
     case indexStoreNotFound(derivedDataPath: String)
+    case spmIndexStoreNotFound(tried: [String])
     case changeCurrentDirectoryFailed(FilePath)
 
     public var errorDescription: String? {
@@ -56,6 +57,9 @@ public enum PeripheryError: Error, LocalizedError, CustomStringConvertible {
             return "JSON deserialization failed: \(describe(error))\nJSON:\n\(json)"
         case let .indexStoreNotFound(derivedDataPath):
             return "Failed to find index datastore at path: \(derivedDataPath)"
+        case let .spmIndexStoreNotFound(tried):
+            let paths = tried.map { "\n  - \($0)" }.joined()
+            return "Failed to locate the SwiftPM index store. Looked for a 'v5' directory in:\(paths)\nBuild the package first (e.g. 'swift build --build-tests'), or pass the location of the index store with '--index-store-path'."
         case let .changeCurrentDirectoryFailed(path):
             return "Failed to change current directory to: \(path)"
         }

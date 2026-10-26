@@ -11,6 +11,7 @@
 ##### Bug Fixes
 
 - Retain declarations marked `@available(<platform>, unavailable)` and declarations referenced only inside platform-conditional `#if` blocks (`os`, `targetEnvironment`, `arch`, `canImport`); opt out with `--disable-platform-conditional-retention`. Fixes #14.
+- Locate the SwiftPM index store with the Swift 6.4 `swiftbuild` backend (`.build/out`) as well as the native backend, via `swift build --show-bin-path`; clear error when no store is found. Fixes #2.
 
 ## 3.8.2 (2026-10-26)
 
