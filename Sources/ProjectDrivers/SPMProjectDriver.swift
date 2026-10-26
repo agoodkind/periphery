@@ -47,7 +47,7 @@ extension SPMProjectDriver: ProjectDriver {
         let indexStorePaths: Set<FilePath> = if !configuration.indexStorePath.isEmpty {
             Set(configuration.indexStorePath)
         } else {
-            [pkg.path.appending(".build/debug/index/store")]
+            try [pkg.indexStorePath(additionalArguments: configuration.buildArguments)]
         }
 
         // Load package description once and reuse it
