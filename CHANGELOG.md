@@ -10,6 +10,20 @@
 
 ##### Bug Fixes
 
+- None.
+
+## 3.8.2 (2026-10-26)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- None.
+
+##### Bug Fixes
+
 - Fix: deterministic DerivedData cache path (schemes were hashed from an unordered Set), #5 / upstream #1141.
 - Retain declarations marked `@available(<platform>, unavailable)` and declarations referenced only inside platform-conditional `#if` blocks (`os`, `targetEnvironment`, `arch`, `canImport`); opt out with `--disable-platform-conditional-retention`. Fixes #14.
 
