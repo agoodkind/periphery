@@ -9,3 +9,11 @@ var UIKitProjectPath: FilePath {
 var SwiftUIProjectPath: FilePath {
     ProjectRootPath.appending("Tests/XcodeTests/SwiftUIProject/SwiftUIProject.xcodeproj")
 }
+
+var SyncedGroupProjectRoot: FilePath {
+    ProjectRootPath.appending("Tests/XcodeTests/SyncedGroupProject")
+}
+
+var SyncedGroupProjectPath: FilePath {
+    SyncedGroupProjectRoot.appending("SyncedGroupProject.xcodeproj")
+}

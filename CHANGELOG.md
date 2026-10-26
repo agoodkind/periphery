@@ -6,7 +6,7 @@
 
 ##### Enhancements
 
-- None.
+- Support Xcode 16+ file system synchronized groups (`PBXFileSystemSynchronizedRootGroup`), including membership exceptions. Fixes #6.
 
 ##### Bug Fixes
 
