@@ -6,6 +6,20 @@
 
 ##### Enhancements
 
+- None.
+
+##### Bug Fixes
+
+- None.
+
+## 3.8.3 (2026-10-26)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
 - Support Xcode 16+ file system synchronized groups (`PBXFileSystemSynchronizedRootGroup`), including membership exceptions. Fixes #6.
 
 ##### Bug Fixes
