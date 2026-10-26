@@ -358,6 +358,8 @@ Any class that inherits `XCTestCase` is automatically retained along with its te
 
 If your project contains Interface Builder files (such as storyboards and XIBs), Periphery will take these into account when identifying unused declarations. Periphery parses these files to identify which classes, `@IBOutlet` properties, `@IBAction` methods, and `@IBInspectable` properties are actually referenced. Only those members that are connected in the Interface Builder file will be retained. Any `@IB*` members that are declared but not connected will be reported as unused.
 
+Files inside Xcode 16+ synchronized folders (`PBXFileSystemSynchronizedRootGroup`) are supported: they are collected per target, honouring each target's membership exceptions.
+
 ### SPI (System Programming Interface)
 
 Swift's `@_spi` attribute marks declarations as pseudo-private, making them accessible only to clients that explicitly import the SPI. While these declarations are technically `public`, they're intended for internal or restricted use.
