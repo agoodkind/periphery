@@ -7,8 +7,7 @@ class FixtureSourceGraphTestCase: SPMSourceGraphTestCase {
     override static func setUp() {
         super.setUp()
 
-        let configuration = Configuration()
-        configuration.buildArguments = ["--build-system", "native"]
+        let configuration = nativeBuildConfiguration()
         build(projectPath: FixturesProjectPath, configuration: configuration)
     }
 

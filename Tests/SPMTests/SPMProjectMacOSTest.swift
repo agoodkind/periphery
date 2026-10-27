@@ -1,5 +1,4 @@
 #if os(macOS)
-    import Configuration
     @testable import TestShared
     import XCTest
 
@@ -7,8 +6,7 @@
         override static func setUp() {
             super.setUp()
 
-            let configuration = Configuration()
-            configuration.buildArguments = ["--build-system", "native"]
+            let configuration = nativeBuildConfiguration()
             build(projectPath: SPMProjectMacOSPath, configuration: configuration)
             index(configuration: configuration)
         }

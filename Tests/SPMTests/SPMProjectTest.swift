@@ -1,4 +1,3 @@
-import Configuration
 @testable import TestShared
 import XCTest
 
@@ -6,8 +5,7 @@ final class SPMProjectTest: SPMSourceGraphTestCase {
     override static func setUp() {
         super.setUp()
 
-        let configuration = Configuration()
-        configuration.buildArguments = ["--build-system", "native"]
+        let configuration = nativeBuildConfiguration()
         build(projectPath: SPMProjectPath, configuration: configuration)
         index(configuration: configuration)
     }
