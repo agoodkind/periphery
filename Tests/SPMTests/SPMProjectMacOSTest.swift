@@ -33,6 +33,7 @@
                 self.assertReferenced(.varInstance("backing"))
                 self.assertReferenced(.varInstance("qualified"))
                 self.assertReferenced(.varInstance("crossFile"))
+                self.assertReferenced(.varInstance("rootRead"))
                 self.assertNotReferenced(.varInstance("unused"))
                 self.assertNotReferenced(.varInstance("deadBinding"))
                 self.assertNotReferenced(.functionMethodInstance("unusedBinding()"))

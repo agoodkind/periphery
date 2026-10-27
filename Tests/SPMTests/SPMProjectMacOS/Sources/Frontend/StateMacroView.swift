@@ -14,6 +14,7 @@ struct StateMacroView: View {
     @SwiftUI.State
     private var qualified = false
     @State var crossFile = false
+    @State var rootRead = false
     @State private var unused = false
     @State private var deadBinding = false
 

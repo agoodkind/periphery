@@ -38,6 +38,7 @@ public final class Reference {
     public var references: Set<Reference> = []
     public let usr: String
     public var role: Role = .unknown
+    public var isExplicitRead: Bool = false
 
     private let hashValueCache: Int
 
