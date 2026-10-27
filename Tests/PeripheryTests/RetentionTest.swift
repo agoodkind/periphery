@@ -426,6 +426,16 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainPublicMacroAndMiscKinds() {
+        analyze(retainPublic: true) {
+            assertReferenced(.macro("FixtureRetainPublicMacro()"))
+            assertNotReferenced(.macro("FixtureInternalMacro()"))
+            assertReferenced(.protocol("FixtureRetainPublicProtocol")) {
+                self.assertReferenced(.associatedtype("FixtureRetainPublicAssoc"))
+            }
+        }
+    }
+
     func testAccessibility() {
         analyze {
             assertAccessibility(.class("FixtureClass31"), .public) {
