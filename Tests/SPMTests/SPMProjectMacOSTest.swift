@@ -7,8 +7,10 @@
         override static func setUp() {
             super.setUp()
 
-            build(projectPath: SPMProjectMacOSPath)
-            index(configuration: Configuration())
+            let configuration = Configuration()
+            configuration.buildArguments = ["--build-system", "native"]
+            build(projectPath: SPMProjectMacOSPath, configuration: configuration)
+            index(configuration: configuration)
         }
 
         func testRetainsInterfaceBuilderDeclarations() {

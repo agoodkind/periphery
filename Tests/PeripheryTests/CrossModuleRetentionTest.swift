@@ -6,8 +6,10 @@ final class CrossModuleRetentionTest: SPMSourceGraphTestCase {
     override static func setUp() {
         super.setUp()
 
-        build(projectPath: FixturesProjectPath)
-        index(configuration: Configuration())
+        let configuration = Configuration()
+        configuration.buildArguments = ["--build-system", "native"]
+        build(projectPath: FixturesProjectPath, configuration: configuration)
+        index(configuration: configuration)
     }
 
     func testCrossModuleInheritanceWithSameName() {
