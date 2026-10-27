@@ -10,7 +10,7 @@
 
 ##### Bug Fixes
 
-- None.
+- With Xcode 27, a SwiftUI `@State` property used only through its projected value (`$foo`) or backing storage (`_foo`) is no longer reported as unused. Fixes #36.
 
 ## 3.8.8 (2026-10-27)
 

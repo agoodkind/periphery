@@ -409,6 +409,15 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsMacroStatePropertyReferencedOnlyViaProjectedValue() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct228")) {
+                self.assertReferenced(.varInstance("onlyProjected"))
+                self.assertNotReferenced(.varInstance("unusedState"))
+            }
+        }
+    }
+
     func testDoesNotRetainPlatformConditionalDeclarationsWhenDisabled() {
         analyze(retainPublic: true, disablePlatformConditionalRetention: true) {
             assertReferenced(.class("FixtureClass226")) {
