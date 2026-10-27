@@ -12,6 +12,20 @@
 
 - None.
 
+## 3.8.4 (2026-10-27)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- None.
+
+##### Bug Fixes
+
+- Fix infinite recursion when expanding paths if a directory name begins with, or is exactly, `**`. Fixes #4. Port of peripheryapp/periphery#1145 by @ZevEisenberg.
+
 ## 3.8.3 (2026-10-26)
 
 ##### Breaking
