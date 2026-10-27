@@ -30,6 +30,10 @@ struct DeclarationDescription: CustomStringConvertible {
         self.init(kind: .typealias, name: name, line: line)
     }
 
+    static func macro(_ name: String, line: Int? = nil) -> Self {
+        self.init(kind: .macro, name: name, line: line)
+    }
+
     static func `associatedtype`(_ name: String, line: Int? = nil) -> Self {
         self.init(kind: .associatedtype, name: name, line: line)
     }
