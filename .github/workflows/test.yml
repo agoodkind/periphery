@@ -109,7 +109,8 @@ jobs:
           exit 1
         fi
         printf '%s\n' "$SWIFT_VERSION"
-        printf 'SWIFT_VERSION=%s\n' "${SWIFT_VERSION%%$'\n'*}" >> "$GITHUB_ENV"
+        SWIFT_VERSION=${SWIFT_VERSION%%$'\n'*}
+        printf 'SWIFT_VERSION=%s\n' "${SWIFT_VERSION//,/}" >> "$GITHUB_ENV"
         xcodebuild -version
         xcrun --find swift
         xcrun --find ld
