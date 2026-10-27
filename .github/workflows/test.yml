@@ -86,11 +86,14 @@ jobs:
     - name: Install Swift (Swiftly)
       if: ${{ matrix.swiftly }}
       run: swiftly install ${{ matrix.swiftly }} --use
-    - name: Select nightly toolchain for Xcode
+    - name: Prepare nightly toolchain for Xcode
       if: ${{ matrix.swiftly }}
       run: |
         TOOLCHAIN_PATH=$(swiftly use --print-location)
         TOOLCHAIN_ID=$(plutil -extract CFBundleIdentifier raw -o - "$TOOLCHAIN_PATH/Info.plist")
+        XCODE_LINKER=$(xcrun --toolchain com.apple.dt.toolchain.XcodeDefault --find ld)
+        # Remove this link when Swift snapshots include ld: https://github.com/swiftlang/swift/issues/89035
+        ln -s "$XCODE_LINKER" "$TOOLCHAIN_PATH/usr/bin/ld"
         printf '%s\n' "$TOOLCHAIN_PATH/usr/bin" >> "$GITHUB_PATH"
         printf 'TOOLCHAINS=%s\n' "$TOOLCHAIN_ID" >> "$GITHUB_ENV"
     - name: Get Swift Version
