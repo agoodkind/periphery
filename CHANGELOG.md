@@ -12,6 +12,20 @@
 
 - None.
 
+## 3.8.7 (2026-10-27)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- None.
+
+##### Bug Fixes
+
+- `public macro` declarations are now visited and retained by `--retain-public`, as are associated types of public protocols. Fixes #7.
+
 ## 3.8.6 (2026-10-27)
 
 ##### Breaking
