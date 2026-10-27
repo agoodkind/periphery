@@ -4,6 +4,7 @@ import Indexer
 import IndexStore
 import Logger
 import Shared
+import SourceGraph
 import SystemPackage
 
 public final class SPMProjectDriver {
@@ -77,9 +78,16 @@ extension SPMProjectDriver: ProjectDriver {
 
     private func interfaceBuilderFiles(from description: PackageDescription) -> Set<FilePath> {
         var xibFiles: Set<FilePath> = []
+        let extensions = ProjectFileKind.interfaceBuilder.extensions
 
         for target in description.targets {
             let targetPath = pkg.path.appending(target.path)
+
+            // SwiftPM processes Interface Builder files implicitly, without a `resources:` declaration,
+            // and `swift package describe` only lists the declared resources.
+            for ext in extensions {
+                xibFiles.formUnion(FilePath.glob("\(targetPath.string)/**/*.\(ext)"))
+            }
 
             guard let resources = target.resources else { continue }
 
@@ -92,9 +100,9 @@ extension SPMProjectDriver: ProjectDriver {
 
                 // Check if the resource path exists and is a xib/storyboard file
                 guard resourcePath.exists else { continue }
-                guard let ext = resourcePath.extension?.lowercased(), ["xib", "storyboard"].contains(ext) else { continue }
+                guard let ext = resourcePath.extension?.lowercased(), extensions.contains(ext) else { continue }
 
-                xibFiles.insert(resourcePath)
+                xibFiles.insert(resourcePath.lexicallyNormalized())
             }
         }
 
