@@ -400,6 +400,15 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsPropertyWrapperReferencedInNegatedPlatformConditionalBlock() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct227")) {
+                self.assertReferenced(.varInstance("sizeClass"))
+                self.assertNotReferenced(.varInstance("unusedSizeClass"))
+            }
+        }
+    }
+
     func testDoesNotRetainPlatformConditionalDeclarationsWhenDisabled() {
         analyze(retainPublic: true, disablePlatformConditionalRetention: true) {
             assertReferenced(.class("FixtureClass226")) {
