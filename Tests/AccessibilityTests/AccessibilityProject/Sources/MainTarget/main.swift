@@ -37,6 +37,12 @@ ProtocolIndirectlyReferencedCrossModuleByExtensionMemberImpl().somePublicFunc()
 _ = PublicTypeUsedAsPublicPropertyTypeRetainer().retain
 _ = PublicTypeUsedAsPublicPropertyInitializer().retain
 
+// Result builder
+_ = PublicResultBuilderUser {
+    "a"
+    "b"
+}
+
 // Typealias
 let _: PublicTypealiasWithClosureType? = nil
 

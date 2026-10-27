@@ -312,6 +312,16 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
         }
     }
 
+    func testPublicResultBuilderUsedCrossModule() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.struct("PublicResultBuilder")) {
+            self.assertNotRedundantPublicAccessibility(.functionMethodStatic("buildBlock(_:)"))
+            self.assertNotRedundantPublicAccessibility(.functionMethodStatic("buildExpression(_:)"))
+            self.assertNotRedundantPublicAccessibility(.functionMethodStatic("buildOptional(_:)"))
+        }
+    }
+
     func testPublicInlinableFunction() {
         index()
 
