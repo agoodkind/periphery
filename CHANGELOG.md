@@ -12,6 +12,20 @@
 
 - None.
 
+## 3.8.8 (2026-10-27)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- None.
+
+##### Bug Fixes
+
+- The SPM driver now discovers implicit `.xib` and `.storyboard` resources under each target folder, so private `@IBAction` / `@IBOutlet` connected in Interface Builder are retained like in Xcode projects. Fixes #13.
+
 ## 3.8.7 (2026-10-27)
 
 ##### Breaking
