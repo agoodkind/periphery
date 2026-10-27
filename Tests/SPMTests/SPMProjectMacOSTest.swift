@@ -7,8 +7,10 @@
         override static func setUp() {
             super.setUp()
 
-            build(projectPath: SPMProjectMacOSPath)
-            index(configuration: Configuration())
+            let configuration = Configuration()
+            configuration.buildArguments = ["--build-system", "native"]
+            build(projectPath: SPMProjectMacOSPath, configuration: configuration)
+            index(configuration: configuration)
         }
 
         func testRetainsInterfaceBuilderDeclarations() {
@@ -21,6 +23,20 @@
                 self.assertNotReferenced(.varInstance("unusedMacOutlet"))
                 self.assertNotReferenced(.functionMethodInstance("unusedMacAction(_:)"))
                 self.assertNotReferenced(.varInstance("unusedMacInspectable"))
+            }
+        }
+
+        func testStatePropertyReads() {
+            assertReferenced(.struct("StateMacroView")) {
+                self.assertReferenced(.varInstance("projected"))
+                self.assertReferenced(.varInstance("direct"))
+                self.assertReferenced(.varInstance("backing"))
+                self.assertReferenced(.varInstance("qualified"))
+                self.assertReferenced(.varInstance("crossFile"))
+                self.assertNotReferenced(.varInstance("unused"))
+                self.assertNotReferenced(.varInstance("writeOnly"))
+                self.assertNotReferenced(.varInstance("deadBinding"))
+                self.assertNotReferenced(.functionMethodInstance("unusedBinding()"))
             }
         }
     }
