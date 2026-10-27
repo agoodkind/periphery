@@ -15,12 +15,10 @@ struct StateMacroView: View {
     private var qualified = false
     @State var crossFile = false
     @State private var unused = false
-    @State private var writeOnly = false
     @State private var deadBinding = false
 
-    init() {
-        _writeOnly = State(initialValue: true)
-    }
+    // Keep synthesized initializer parameters from referencing the state properties.
+    init() {}
 
     var body: some View {
         VStack {

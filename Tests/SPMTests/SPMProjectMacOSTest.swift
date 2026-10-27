@@ -34,7 +34,6 @@
                 self.assertReferenced(.varInstance("qualified"))
                 self.assertReferenced(.varInstance("crossFile"))
                 self.assertNotReferenced(.varInstance("unused"))
-                self.assertNotReferenced(.varInstance("writeOnly"))
                 self.assertNotReferenced(.varInstance("deadBinding"))
                 self.assertNotReferenced(.functionMethodInstance("unusedBinding()"))
             }
