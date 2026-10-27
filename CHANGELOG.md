@@ -12,6 +12,21 @@
 
 - None.
 
+## 3.8.6 (2026-10-27)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- None.
+
+##### Bug Fixes
+
+- A declaration exposed through a public `@resultBuilder` from another module is no longer reported as redundant public (`RedundantExplicitPublicAccessibilityMarker`). Fixes #10.
+- Added a regression test for #8: retention under `#if !os(...)` (covered since 3.8.2).
+
 ## 3.8.5 (2026-10-27)
 
 ##### Breaking
