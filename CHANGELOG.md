@@ -12,6 +12,20 @@
 
 - None.
 
+## 3.8.5 (2026-10-27)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- None.
+
+##### Bug Fixes
+
+- Run `xcodebuild -list` in Periphery's own DerivedData location (`-IDECustomDerivedDataLocation`) and honor `--clean-build` before listing schemes. Fixes #3. Port of peripheryapp/periphery#1147 by @lukaskollmer.
+
 ## 3.8.4 (2026-10-27)
 
 ##### Breaking
