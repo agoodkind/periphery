@@ -10,7 +10,7 @@
 
 ##### Bug Fixes
 
-- None.
+- With Xcode 27, a SwiftUI `@State` property used only through its projected value (`$foo`) or backing storage (`_foo`) is no longer reported as unused. Fixes #36. Under Xcode 27 only `@State` is a macro (`@Environment`, `@FocusState`, `@Binding`, `@AppStorage` and others remain property wrappers); a property initialized via `_foo = State(wrappedValue:)` is also retained. Known limitation: the fix only applies with Xcode 27 (Swift 6.4); earlier toolchains do not exhibit the problem.
 
 ## 3.8.8 (2026-10-27)
 
