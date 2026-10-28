@@ -1333,6 +1333,45 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    /// Issue #9: an ignore comment trailing the opening brace of an extension or type must cover all its members,
+    /// including subscripts and other declarations without a simple name, and must not leak to other extensions.
+    func testIgnoreCommentOnFirstLineOfExtension() {
+        analyze(retainPublic: false) {
+            assertReferenced(.extensionStruct("String")) {
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+                self.assertReferenced(.functionConstructor("init(fixtureIssue9Value:)"))
+                self.assertReferenced(.varInstance("fixtureIssue9Computed"))
+                self.assertReferenced(.functionOperatorInfix("-(_:_:)"))
+                self.assertReferenced(.functionMethodInstance("fixtureIssue9Func()"))
+            }
+            assertReferenced(.extensionStruct("Int")) {
+                self.assertReferenced(.functionSubscript("subscript(fixtureIssue9Offset:)"))
+                self.assertReferenced(.functionMethodInstance("fixtureIssue9IntFunc()"))
+            }
+            assertReferenced(.struct("FixtureIssue9Struct")) {
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+                self.assertReferenced(.functionMethodInstance("fixtureIssue9StructFunc()"))
+            }
+            assertReferenced(.class("FixtureIssue9Class")) {
+                self.assertReferenced(.functionDestructor("deinit"))
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+            }
+            assertReferenced(.extensionStruct("Array")) {
+                self.assertReferenced(.functionSubscript("subscript(fixtureIssue9Safe:)"))
+            }
+            assertReferenced(.extensionStruct("Set")) {
+                self.assertReferenced(.functionSubscript("subscript(fixtureIssue9Member:)"))
+            }
+            assertReferenced(.extensionStruct("Substring")) {
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+            }
+            assertReferenced(.extensionStruct("Double")) {
+                self.assertNotReferenced(.functionSubscript("subscript(fixtureIssue9Control:)"))
+                self.assertNotReferenced(.functionMethodInstance("fixtureIssue9ControlFunc()"))
+            }
+        }
+    }
+
     func testIgnoreAllComment() {
         analyze(retainPublic: false) {
             assertReferenced(.class("Fixture115")) {
