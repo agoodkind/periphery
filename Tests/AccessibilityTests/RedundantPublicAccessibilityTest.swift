@@ -6,7 +6,8 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
     override static func setUp() {
         super.setUp()
 
-        build(projectPath: AccessibilityProjectPath)
+        let configuration = nativeBuildConfiguration()
+        build(projectPath: AccessibilityProjectPath, configuration: configuration)
     }
 
     func testRedundantPublicType() {

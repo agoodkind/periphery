@@ -1,5 +1,4 @@
 #if os(macOS)
-    import Configuration
     @testable import TestShared
     import XCTest
 
@@ -7,8 +6,9 @@
         override static func setUp() {
             super.setUp()
 
-            build(projectPath: SPMProjectMacOSPath)
-            index(configuration: Configuration())
+            let configuration = nativeBuildConfiguration()
+            build(projectPath: SPMProjectMacOSPath, configuration: configuration)
+            index(configuration: configuration)
         }
 
         func testRetainsInterfaceBuilderDeclarations() {
