@@ -12,6 +12,20 @@
 
 - None.
 
+## 3.9.0 (2026-10-28)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- Unused String Catalog (`.xcstrings`) keys are now reported: keys never referenced by `NSLocalizedString`, `String(localized:)`, `LocalizedStringKey`, `Text("…")` or `Bundle.localizedString` literals are flagged, with an opt-out `disable_unused_localized_string_analysis`. Keys used through generated symbols (`String(localized: .key)`), dynamic keys and SwiftUI initializers taking a `LocalizedStringKey` (`Button`, `Label`, `.navigationTitle`) are not yet tracked and may be reported as unused. Ported from upstream #893 by Ian Leitch. Closes #55.
+
+##### Bug Fixes
+
+- `ExpressibleByArgument` conformances in `ScanCommand` are spelled with their module, which silences the retroactive-conformance warnings under Bazel. Fixes #53.
+
 ## 3.8.10 (2026-10-28)
 
 ##### Breaking
