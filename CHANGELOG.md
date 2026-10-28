@@ -10,6 +10,9 @@
 
 ##### Bug Fixes
 
+- With Xcode 27, a SwiftUI `@State` property used only through its projected value (`$foo`) or backing storage (`_foo`) is no longer reported as unused. Fixes #36. Under Xcode 27 only `@State` is a macro (`@Environment`, `@FocusState`, `@Binding`, `@AppStorage` and others remain property wrappers); a property initialized via `_foo = State(wrappedValue:)` is also retained. Known limitation: the fix only applies with Xcode 27 (Swift 6.4); earlier toolchains do not exhibit the problem.
+- Retain every implicit result builder entry point: `buildBlock` of any arity, `buildPartialBlock(first:)` and `buildPartialBlock(accumulated:next:)`.
+  [#30](https://github.com/tiny-earth-moon/periphery/issues/30)
 - The SPM driver now indexes `.xcdatamodeld` Core Data models, declared or implicit, under each target folder, so classes referenced only by a model (e.g. value transformers) are no longer reported as unused. Fixes #33.
 
 ## 3.8.8 (2026-10-27)
