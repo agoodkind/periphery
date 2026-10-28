@@ -6,11 +6,25 @@
 
 ##### Enhancements
 
-- CI re-enabled on GitHub Actions; tool pins aligned (swiftformat 0.64.2, swiftlint 0.65.1); dependencies bumped (xcodeproj 9.17.6, swift-argument-parser 1.8.2, swift-system 1.8.1, Yams 6.2.2, AEXML 4.7.3).
+- None.
 
 ##### Bug Fixes
 
 - None.
+
+## 3.8.10 (2026-10-28)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- CI re-enabled on GitHub Actions; tool pins aligned (swiftformat 0.64.2, swiftlint 0.65.1); dependencies bumped (xcodeproj 9.17.6, swift-argument-parser 1.8.2, swift-system 1.8.1, Yams 6.2.2, AEXML 4.7.3).
+
+##### Bug Fixes
+
+- `#Preview` expansions that preview a used SwiftUI view are now retained together with the code they reference, so helpers used only from a live preview are no longer reported as unused; previews of unused code stay unused. Fixes #15.
 
 ## 3.8.9 (2026-10-28)
 
