@@ -31,6 +31,7 @@ public final class XcodeTarget {
         try identifyFiles(kind: .xcDataModel, in: sourcesBuildPhases)
         try identifyFiles(kind: .xcMappingModel, in: sourcesBuildPhases)
         try identifyFiles(kind: .interfaceBuilder, in: resourcesBuildPhases)
+        try identifyFiles(kind: .xcStrings, in: resourcesBuildPhases)
         try identifyInfoPlistFiles()
     }
 

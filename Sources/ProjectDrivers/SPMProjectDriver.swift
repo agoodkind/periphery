@@ -64,11 +64,13 @@ extension SPMProjectDriver: ProjectDriver {
         let sourceFiles = try collector.collect()
         let xibPaths = projectFiles(of: .interfaceBuilder, from: description)
         let xcDataModelPaths = projectFiles(of: .xcDataModel, from: description)
+        let xcStringsPaths = projectFiles(of: .xcStrings, from: description)
 
         return IndexPlan(
             sourceFiles: sourceFiles,
             xibPaths: xibPaths,
-            xcDataModelPaths: xcDataModelPaths
+            xcDataModelPaths: xcDataModelPaths,
+            xcStringsPaths: xcStringsPaths
         )
     }
 
