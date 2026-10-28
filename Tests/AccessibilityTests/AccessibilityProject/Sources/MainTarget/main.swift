@@ -91,3 +91,15 @@ takeExtensionSameTypeGenericRequirement(.defaultInstance)
 
 // Typed throws
 try? PublicTypeUsedAsPublicFunctionThrowTypeRetainer().retain()
+
+// Extension with same-type generic requirement on a class
+takeClassExtensionSameTypeGenericRequirement(.defaultClassInstance)
+takeClassExtensionSameTypeGenericRequirement(.defaultPublicExtensionInstance)
+RedundantPublicClassUsedAsExtensionSameTypeGenericRequirementRetainer().retain()
+
+// Generic typealias
+let _: PublicTypeUsedInPublicGenericTypealias_Alias<Int>? = nil
+RedundantPublicTypeUsedInInternalTypealiasRetainer().retain()
+
+_ = PublicTypeUsedAsGenericStructExtensionWhereClause_Container().elementCount()
+takePublicFunctionWhereClause([])

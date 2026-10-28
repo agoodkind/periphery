@@ -347,6 +347,26 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
         assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedAsExtensionSameTypeGenericRequirement"))
     }
 
+    func testPublicClassUsedAsExtensionSameTypeGenericRequirement() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.class("PublicClassUsedAsExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.class("PublicClassUsedAsPublicExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.protocol("PublicClassUsedAsExtensionSameTypeGenericRequirement_Protocol"))
+        assertRedundantPublicAccessibility(.class("RedundantPublicClassUsedAsExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.class("PublicTypeUsedAsGenericStructExtensionWhereClause"))
+        assertNotRedundantPublicAccessibility(.class("PublicTypeUsedAsPublicFunctionWhereClause"))
+    }
+
+    func testPublicTypeUsedInPublicGenericTypealias() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.typealias("PublicTypeUsedInPublicGenericTypealias_Alias"))
+        assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedInPublicGenericTypealias_Wrapper"))
+        assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedInPublicGenericTypealias"))
+        assertRedundantPublicAccessibility(.struct("RedundantPublicTypeUsedInInternalTypealias"))
+    }
+
     func testPublicComparableOperatorFunction() {
         index()
 
