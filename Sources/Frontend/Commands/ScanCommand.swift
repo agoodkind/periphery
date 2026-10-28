@@ -340,8 +340,8 @@ struct ScanCommand: ParsableCommand {
     }
 }
 
-extension OutputFormat: ExpressibleByArgument {}
-extension ColorOption: ExpressibleByArgument {}
+extension OutputFormat: ArgumentParser.ExpressibleByArgument {}
+extension ColorOption: ArgumentParser.ExpressibleByArgument {}
 
 extension FilePath: ArgumentParser.ExpressibleByArgument {
     public init?(argument: String) {
