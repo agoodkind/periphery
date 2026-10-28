@@ -418,6 +418,44 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsMacroStatePropertyReferencedOnlyViaBackingStorage() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct229")) {
+                self.assertReferenced(.varInstance("onlyBacking"))
+                self.assertNotReferenced(.varInstance("unusedState"))
+            }
+        }
+    }
+
+    // Under Xcode 27 only `@State` is an attached macro in SwiftUI; `@Environment`, `@FocusState`, `@AppStorage`,
+    // `@SceneStorage`, `@StateObject` and `@Binding` remain property wrappers, whose `$foo` references
+    // resolve to the wrapped property. Pinned so a toolchain change surfaces here.
+    func testRetainsPropertyWrapperPropertiesReferencedOnlyViaProjectedValue() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct230")) {
+                self.assertReferenced(.varInstance("dismiss"))
+                self.assertReferenced(.varInstance("focused"))
+                self.assertReferenced(.varInstance("stored"))
+                self.assertReferenced(.varInstance("scene"))
+                self.assertReferenced(.varInstance("model"))
+                self.assertReferenced(.varInstance("binding"))
+                self.assertNotReferenced(.varInstance("unusedEnvironment"))
+                self.assertNotReferenced(.varInstance("unusedFocus"))
+                self.assertNotReferenced(.varInstance("unusedStored"))
+            }
+        }
+    }
+
+    // Assigning the backing storage (`_foo = State(wrappedValue:)`) under Xcode 27 `@State` still retains `foo`,
+    // so there is no false negative for the explicit-initializer pattern. Pinned to detect toolchain changes.
+    func testRetainsMacroStatePropertyInitializedViaBackingStorage() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct231")) {
+                self.assertReferenced(.varInstance("assignedViaBacking"))
+            }
+        }
+    }
+
     func testDoesNotRetainPlatformConditionalDeclarationsWhenDisabled() {
         analyze(retainPublic: true, disablePlatformConditionalRetention: true) {
             assertReferenced(.class("FixtureClass226")) {
