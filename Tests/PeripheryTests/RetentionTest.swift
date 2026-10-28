@@ -1333,8 +1333,8 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
-    // Issue #9: an ignore comment trailing the opening brace of an extension or type must cover all its members,
-    // including subscripts and other declarations without a simple name, and must not leak to other extensions.
+    /// Issue #9: an ignore comment trailing the opening brace of an extension or type must cover all its members,
+    /// including subscripts and other declarations without a simple name, and must not leak to other extensions.
     func testIgnoreCommentOnFirstLineOfExtension() {
         analyze(retainPublic: false) {
             assertReferenced(.extensionStruct("String")) {
@@ -1356,9 +1356,19 @@ final class RetentionTest: FixtureSourceGraphTestCase {
                 self.assertReferenced(.functionDestructor("deinit"))
                 self.assertReferenced(.functionSubscript("subscript(_:)"))
             }
-            assertNotReferenced(.extensionStruct("Double"))
-            assertNotReferenced(.functionSubscript("subscript(fixtureIssue9Control:)"))
-            assertNotReferenced(.functionMethodInstance("fixtureIssue9ControlFunc()"))
+            assertReferenced(.extensionStruct("Array")) {
+                self.assertReferenced(.functionSubscript("subscript(fixtureIssue9Safe:)"))
+            }
+            assertReferenced(.extensionStruct("Set")) {
+                self.assertReferenced(.functionSubscript("subscript(fixtureIssue9Member:)"))
+            }
+            assertReferenced(.extensionStruct("Substring")) {
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+            }
+            assertReferenced(.extensionStruct("Double")) {
+                self.assertNotReferenced(.functionSubscript("subscript(fixtureIssue9Control:)"))
+                self.assertNotReferenced(.functionMethodInstance("fixtureIssue9ControlFunc()"))
+            }
         }
     }
 

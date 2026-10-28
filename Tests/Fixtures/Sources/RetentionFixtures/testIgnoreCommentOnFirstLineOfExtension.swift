@@ -53,3 +53,22 @@ extension Double {
 
     func fixtureIssue9ControlFunc() {}
 }
+
+extension Array where Element == Int { // periphery:ignore
+    subscript(fixtureIssue9Safe index: Int) -> Int? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
+extension Set<String> { // periphery:ignore
+    subscript(fixtureIssue9Member member: String) -> Bool {
+        contains(member)
+    }
+}
+
+// Exact snippet from upstream issue #1113 (tabs, sole member, unnamed parameter).
+extension Substring { // periphery:ignore
+	subscript(_: Int) -> Self {
+		self
+	}
+}
