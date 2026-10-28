@@ -41,17 +41,22 @@ jobs:
     # file missing from `srcs` only fails here. Not verified locally (no bazel).
     name: Bazel
     runs-on: macos-26
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: bazelbuild/setup-bazelisk@v3
       - name: Cache Bazel
+        # ~/.cache/bazel is not Bazel's output base on macOS (/private/var/tmp/_bazel_*), so the
+        # previous cache never held anything: use an explicit disk + repository cache (.bazelrc, --config=ci).
         uses: actions/cache@v6
         with:
           path: |
-            ~/.cache/bazel
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repo
             ~/.cache/bazelisk
-          key: ${{ runner.os }}-bazel-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          key: ${{ runner.os }}-bazel-${{ hashFiles('.bazelversion', 'MODULE.bazel.lock') }}-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-bazel-${{ hashFiles('.bazelversion', 'MODULE.bazel.lock') }}-
             ${{ runner.os }}-bazel-
       - name: Build
-        run: bazel build //:periphery
+        run: bazel build --config=ci //:periphery
