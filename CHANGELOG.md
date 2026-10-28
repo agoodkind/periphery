@@ -6,7 +6,7 @@
 
 ##### Enhancements
 
-- None.
+- CI re-enabled on GitHub Actions; tool pins aligned (swiftformat 0.64.2, swiftlint 0.65.1); dependencies bumped (xcodeproj 9.17.6, swift-argument-parser 1.8.2, swift-system 1.8.1, Yams 6.2.2, AEXML 4.7.3).
 
 ##### Bug Fixes
 

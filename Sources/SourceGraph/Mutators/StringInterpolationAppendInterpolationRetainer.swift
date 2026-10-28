@@ -2,8 +2,8 @@ import Configuration
 import Foundation
 import Shared
 
-// https://github.com/apple/swift/issues/56189
-// The index store does not contain references to `appendInterpolation` functions from their use in string literals.
+/// https://github.com/apple/swift/issues/56189
+/// The index store does not contain references to `appendInterpolation` functions from their use in string literals.
 final class StringInterpolationAppendInterpolationRetainer: SourceGraphMutator {
     private let graph: SourceGraph
 

@@ -427,9 +427,9 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
-    // Under Xcode 27 only `@State` is an attached macro in SwiftUI; `@Environment`, `@FocusState`, `@AppStorage`,
-    // `@SceneStorage`, `@StateObject` and `@Binding` remain property wrappers, whose `$foo` references
-    // resolve to the wrapped property. Pinned so a toolchain change surfaces here.
+    /// Under Xcode 27 only `@State` is an attached macro in SwiftUI; `@Environment`, `@FocusState`, `@AppStorage`,
+    /// `@SceneStorage`, `@StateObject` and `@Binding` remain property wrappers, whose `$foo` references
+    /// resolve to the wrapped property. Pinned so a toolchain change surfaces here.
     func testRetainsPropertyWrapperPropertiesReferencedOnlyViaProjectedValue() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct230")) {
@@ -446,8 +446,8 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
-    // Assigning the backing storage (`_foo = State(wrappedValue:)`) under Xcode 27 `@State` still retains `foo`,
-    // so there is no false negative for the explicit-initializer pattern. Pinned to detect toolchain changes.
+    /// Assigning the backing storage (`_foo = State(wrappedValue:)`) under Xcode 27 `@State` still retains `foo`,
+    /// so there is no false negative for the explicit-initializer pattern. Pinned to detect toolchain changes.
     func testRetainsMacroStatePropertyInitializedViaBackingStorage() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct231")) {
@@ -1198,8 +1198,8 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
-    // https://github.com/apple/swift/issues/64686
-    // https://github.com/peripheryapp/periphery/issues/264
+    /// https://github.com/apple/swift/issues/64686
+    /// https://github.com/peripheryapp/periphery/issues/264
     func testSelfReferencedConstructor() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct3")) {
@@ -1214,7 +1214,7 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
-    // https://github.com/apple/swift/issues/56541
+    /// https://github.com/apple/swift/issues/56541
     func testStaticMemberUsedAsSubscriptKey() {
         analyze(retainPublic: true) {
             assertReferenced(.enum("FixtureEnum128")) {

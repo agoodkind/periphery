@@ -294,7 +294,9 @@ protocol AbstractSetting {
         set { value = setter(newValue) ?? defaultValue }
     }
 
-    public var projectedValue: Setting { self }
+    public var projectedValue: Setting {
+        self
+    }
 
     var hasNonDefaultValue: Bool {
         value != defaultValue

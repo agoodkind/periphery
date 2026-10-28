@@ -206,7 +206,7 @@ final class UnusedParameterTest: XCTestCase {
         assertUnused(label: "otherUnused", name: "otherUnused", in: "myFunc(class:func:otherUsed:otherUnused:)")
     }
 
-    // https://github.com/peripheryapp/periphery/issues/994
+    /// https://github.com/peripheryapp/periphery/issues/994
     func testCaptureListUsage() {
         analyze()
         // Parameter used in capture list should be considered used

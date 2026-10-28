@@ -1,6 +1,6 @@
 module(
     name = "periphery",
-    version = "3.8.1",
+    version = "3.8.9",
     compatibility_level = 1,
 )
 
@@ -20,7 +20,7 @@ bazel_dep(name = "swift-syntax", version = "603.0.0.bcr.1")
 bazel_dep(name = "swift-system", version = "1.6.4.bcr.1")
 bazel_dep(name = "pathkit", version = "1.0.1.1")
 bazel_dep(name = "xcodeproj", version = "9.10.1")
-bazel_dep(name = "yams", version = "6.2.1")
+bazel_dep(name = "yams", version = "6.2.2")
 
 # Generated repo
 use_repo(use_extension("//bazel:generated.bzl", "generated"), "periphery_generated")
