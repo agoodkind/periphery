@@ -39,6 +39,8 @@ jobs:
   bazel:
     # Guards the Bazel build: BUILD.bazel lists sources explicitly, so a Swift
     # file missing from `srcs` only fails here. Not verified locally (no bazel).
+    # bazelisk ships with the macOS runner images (no setup-bazelisk action: it ran on
+    # Node 20 and its own cache restore answered 400 on every run).
     name: Bazel
     # Same preview image as the macOS job: `macos-26` jobs waited 15 min for a runner and were
     # cancelled by GitHub (no runner assigned), while `xcode-27` runners start within seconds.
@@ -48,7 +50,6 @@ jobs:
       - uses: actions/checkout@v7
       - name: Select Xcode 27.2
         run: sudo xcode-select -s /Applications/Xcode_27.2.app
-      - uses: bazelbuild/setup-bazelisk@v3
       - name: Cache Bazel
         # ~/.cache/bazel is not Bazel's output base on macOS (/private/var/tmp/_bazel_*), so the
         # previous cache never held anything: use an explicit disk + repository cache (.bazelrc, --config=ci).
@@ -57,7 +58,6 @@ jobs:
           path: |
             ~/.cache/bazel-disk
             ~/.cache/bazel-repo
-            ~/.cache/bazelisk
           key: ${{ runner.os }}-bazel-${{ hashFiles('.bazelversion', 'MODULE.bazel.lock') }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-bazel-${{ hashFiles('.bazelversion', 'MODULE.bazel.lock') }}-
