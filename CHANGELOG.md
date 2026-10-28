@@ -10,7 +10,8 @@
 
 ##### Bug Fixes
 
-- None.
+- Retain every implicit result builder entry point: `buildBlock` of any arity, `buildPartialBlock(first:)` and `buildPartialBlock(accumulated:next:)`.
+  [#30](https://github.com/tiny-earth-moon/periphery/issues/30)
 
 ## 3.8.8 (2026-10-27)
 
