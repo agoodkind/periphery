@@ -1022,6 +1022,23 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsAllResultBuilderEntryPoints() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureResultBuilderPartial")) {
+                self.assertReferenced(.functionMethodStatic("buildPartialBlock(first:)"))
+                self.assertReferenced(.functionMethodStatic("buildPartialBlock(accumulated:next:)"))
+                self.assertNotReferenced(.functionMethodStatic("unusedHelper()"))
+            }
+            assertReferenced(.struct("FixtureResultBuilderArities")) {
+                self.assertReferenced(.functionMethodStatic("buildBlock()"))
+                self.assertReferenced(.functionMethodStatic("buildBlock(_:_:)"))
+                self.assertReferenced(.functionMethodStatic("buildBlock(_:)"))
+                self.assertReferenced(.functionMethodStatic("buildEither(first:)"))
+                self.assertNotReferenced(.functionMethodStatic("unusedHelper()"))
+            }
+        }
+    }
+
     func testRetainsCallAsFunction() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct1")) {
