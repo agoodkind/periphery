@@ -367,10 +367,27 @@ For example, with `--retain-public --no-retain-spi Internal`, Periphery will:
 This is particularly useful for internal SPIs that should be audited for unused code while still retaining the framework's public API.
 ### Localized Strings
 
-Periphery can identify unused localized strings in String Catalog (`.xcstrings`) files. It detects keys used via `NSLocalizedString`, `String(localized:)`, `LocalizedStringKey`, `LocalizedStringResource`, `Text`, and `Bundle.localizedString(forKey:)`. Catalogues are discovered from Xcode target resources (including synchronized folders), SPM target `resources`, Bazel `AppleResourceInfo` and the `xcstrings` key of a generic project configuration. This analysis can be disabled with `--disable-unused-localized-string-analysis` (or `disable_unused_localized_string_analysis: true` in `.periphery.yml`).
+Periphery can identify unused localized strings in String Catalog (`.xcstrings`) files. Catalogues are discovered from Xcode target resources (including synchronized folders), SPM target `resources`, Bazel `AppleResourceInfo` and the `xcstrings` key of a generic project configuration. This analysis can be disabled with `--disable-unused-localized-string-analysis` (or `disable_unused_localized_string_analysis: true` in `.periphery.yml`).
+
+A key is considered used when a static string literal with the same value is:
+
+- Passed to a parameter of type `LocalizedStringKey`, `LocalizedStringResource`, `String.LocalizationValue`, `DisplayRepresentation` or `IntentDescription` (including optionals, arrays and variadics). The parameter type is resolved from the index store, so this covers SwiftUI initializers and modifiers (`Text`, `Button`, `Label`, `Toggle`, `Section`, `navigationTitle`, ...), `String(localized:)`, as well as your own functions and initializers. A literal passed to a plain `String` parameter (e.g. `Label("title", systemImage: "star")`'s `systemImage`) is not considered a key.
+- Passed to `NSLocalizedString`, `Bundle.localizedString(forKey:)`, `LocalizedStringKey(_:)`, `LocalizedStringResource(_:)` or `Text(_:)`, matched by name.
+- Assigned to, returned from, or used as the default value of a declaration annotated with one of the types above (e.g. `static let title: LocalizedStringResource = "key"`).
+
+When the called function cannot be resolved (e.g. calling a closure, an enum case constructor or an Objective-C method), the literals passed to it are conservatively considered keys. Ternaries and array literals of string literals are looked through.
+
+Catalogues matching the `--localized-string-catalog-exclude` globs (`localized_string_catalog_exclude` in `.periphery.yml`) are not analysed. By default `**/InfoPlist.xcstrings` and `**/AppShortcuts.xcstrings` are excluded, since their keys are consumed by the system rather than referenced from Swift source. Setting the option replaces the default list, so include these patterns if you add your own:
+
+```yaml
+localized_string_catalog_exclude:
+  - "**/InfoPlist.xcstrings"
+  - "**/AppShortcuts.xcstrings"
+  - "**/DefaultCategories.xcstrings"
+```
 
 > [!NOTE]
-> Only static string literals are detected, and keys are matched regardless of the `table:`/`bundle:` arguments. Keys referenced through Xcode 26+ generated symbols (e.g. `Text(.myKey)`) are not yet detected. Dynamic keys (e.g., `String(localized: variable)`) cannot be analyzed and may result in false positives. Where possible, refactor dynamic keys to use conditional expressions with static literals:
+> Only static string literals are detected, and keys are matched regardless of the `table:`/`bundle:` arguments. Keys referenced through Xcode 26+ generated symbols (e.g. `Text(.myKey)`) are not yet detected. Interpolated literals (e.g. `Text("Hello \(name)")`, whose key is `Hello %@`) and dynamic keys (e.g., `String(localized: variable)`) cannot be matched to a catalogue key and may result in false positives. Keep such keys in a dedicated catalogue excluded with `localized_string_catalog_exclude`, or, where possible, refactor dynamic keys to use conditional expressions with static literals:
 > ```swift
 > var message: String {
 >     if condition {
