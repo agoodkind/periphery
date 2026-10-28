@@ -21,6 +21,17 @@ final class SwiftUIProjectTest: XcodeSourceGraphTestCase {
         assertNotReferenced(.struct("PreviewOnlyView_PreviewProvider"))
     }
 
+    func testRetainsPreviewOnlyCodeReferencedFromLivePreview() {
+        assertReferenced(.enum("LivePreviewSampleData")) {
+            self.assertReferenced(.varStatic("title"))
+        }
+    }
+
+    func testDoesNotRetainCodeReferencedOnlyFromDeadPreview() {
+        assertNotReferenced(.struct("DeadPreviewedView"))
+        assertNotReferenced(.enum("DeadPreviewSampleData"))
+    }
+
     func testRetainsLibraryContentProvider() {
         assertReferenced(.struct("LibraryOnlyView"))
         assertReferenced(.struct("LibraryOnlyView_LibraryContentProvider"))
