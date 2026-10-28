@@ -390,4 +390,36 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
 
         assertNotRedundantPublicAccessibility(.enum("PublicTypeUsedAsPublicFunctionThrowType"))
     }
+
+    func testPublicMemberInNonPublicExtensionOfNonPublicType() {
+        index()
+
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalTypeExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInPrivateTypeExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInFileprivateTypeExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalProtocolExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInNestedTypeOfInternalTypeExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalNestedTypeExtension()"))
+        assertRedundantPublicAccessibility(.class("PublicMemberInRedundantPublicTypeExtension"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInRedundantPublicTypeExtension()"))
+    }
+
+    func testPublicMemberInInternalNestedTypeOfPublicType() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.class("PublicMemberInInternalNestedType_Outer"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalNestedType()"))
+        assertNotRedundantPublicAccessibility(.class("PublicMemberInInternalNestedTypeOfExtension_Outer"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalNestedTypeOfExtension()"))
+    }
+
+    func testPublicMemberInNonPublicExtensionOfPublicType() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.class("PublicMemberInNonPublicExtensionOfPublicType"))
+        assertNotRedundantPublicAccessibility(.functionMethodInstance("publicFuncInNonPublicExtensionOfPublicType()"))
+        assertNotRedundantPublicAccessibility(.protocol("PublicMemberInNonPublicExtensionOfPublicProtocol"))
+        assertNotRedundantPublicAccessibility(.functionMethodInstance("publicFuncInNonPublicExtensionOfPublicProtocol()"))
+        assertNotRedundantPublicAccessibility(.functionMethodInstance("publicFuncInExternalTypeExtension()"))
+    }
 }
