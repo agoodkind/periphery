@@ -347,6 +347,37 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
         assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedAsExtensionSameTypeGenericRequirement"))
     }
 
+    func testPublicClassUsedAsExtensionSameTypeGenericRequirement() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.class("PublicClassUsedAsExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.class("PublicClassUsedAsPublicExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.protocol("PublicClassUsedAsExtensionSameTypeGenericRequirement_Protocol"))
+        assertRedundantPublicAccessibility(.class("RedundantPublicClassUsedAsExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.class("PublicTypeUsedAsGenericStructExtensionWhereClause"))
+        assertNotRedundantPublicAccessibility(.class("PublicTypeUsedAsPublicFunctionWhereClause"))
+    }
+
+    func testPublicTypeUsedInPublicGenericTypealias() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.typealias("PublicTypeUsedInPublicGenericTypealias_Alias"))
+        assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedInPublicGenericTypealias_Wrapper"))
+        assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedInPublicGenericTypealias"))
+        assertRedundantPublicAccessibility(.struct("RedundantPublicTypeUsedInInternalTypealias"))
+    }
+
+    // The conforming type is internal, so the witness only needs to be internal: `public` is redundant even though the
+    // protocol is public and declared in another module (swiftc accepts the witness without `public`).
+    func testInternalTypeWitnessingCrossModulePublicProtocol() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.protocol("PublicProtocolWithStaticRequirementUsedByExtension"))
+        assertNotRedundantPublicAccessibility(.class("InternalClassWitnessingCrossModuleProtocol")) {
+            self.assertRedundantPublicAccessibility(.varStatic("bundleName"))
+        }
+    }
+
     func testPublicComparableOperatorFunction() {
         index()
 
