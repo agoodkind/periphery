@@ -74,6 +74,9 @@ struct ScanCommand: ParsableCommand {
     @Flag(help: "Disable identification of unused localized strings from String Catalogs (xcstrings)")
     var disableUnusedLocalizedStringAnalysis: Bool = defaultConfiguration.$disableUnusedLocalizedStringAnalysis.defaultValue
 
+    @Option(parsing: .upToNextOption, help: "String Catalog (xcstrings) file globs to exclude from unused localized string analysis")
+    var localizedStringCatalogExclude: [String] = defaultConfiguration.$localizedStringCatalogExclude.defaultValue
+
     @Option(parsing: .upToNextOption, help: "Names of unused imported modules to retain")
     var retainUnusedImportedModules: [String] = defaultConfiguration.$retainUnusedImportedModules.defaultValue
 
@@ -211,6 +214,7 @@ struct ScanCommand: ParsableCommand {
         configuration.apply(\.$disableUnusedImportAnalysis, disableUnusedImportAnalysis)
         configuration.apply(\.$superfluousIgnoreComments, superfluousIgnoreComments)
         configuration.apply(\.$disableUnusedLocalizedStringAnalysis, disableUnusedLocalizedStringAnalysis)
+        configuration.apply(\.$localizedStringCatalogExclude, localizedStringCatalogExclude)
         configuration.apply(\.$retainUnusedImportedModules, retainUnusedImportedModules)
         configuration.apply(\.$externalEncodableProtocols, externalEncodableProtocols)
         configuration.apply(\.$externalCodableProtocols, externalCodableProtocols)
