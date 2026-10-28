@@ -10,3 +10,14 @@
 --enable blankLinesAfterGuardStatements
 --enable blankLinesAroundMark
 --enable blankLinesBetweenImports
+
+# swiftformat 0.64 rules that rewrite code semantics, not just layout
+--disable preferForLoop
+--disable redundantSelf
+--disable redundantThrows
+--disable hoistTry
+--disable redundantVariable
+--disable noForceTryInTests
+--disable noForceUnwrapInTests
+--disable nestedIf
+--disable repeatedGuard
