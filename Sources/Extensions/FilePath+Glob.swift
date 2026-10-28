@@ -103,6 +103,7 @@ private final class Glob {
 
     private func resolve(base: URL?, remainder: String) -> String {
         guard let base else { return remainder }
+
         let joined = remainder.isEmpty ? base : base.appendingPathComponent(remainder)
         return FilePath(joined.path).lexicallyNormalized().string
     }

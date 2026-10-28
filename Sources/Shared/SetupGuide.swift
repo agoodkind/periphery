@@ -76,7 +76,9 @@ open class SetupGuideHelpers {
                 }
             }
 
-            if !selected.isEmpty { return .some(selected) }
+            if !selected.isEmpty {
+                return .some(selected)
+            }
         }
 
         print(logger.colorize("\nInvalid input, expected a number.\n", .boldYellow))

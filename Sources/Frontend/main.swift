@@ -1,8 +1,8 @@
 import ArgumentParser
 import Foundation
 
-// When stdout is a pipe, enable line buffering so output is flushed after each
-// newline rather than block-buffered, ensuring timely output to the consumer.
+/// When stdout is a pipe, enable line buffering so output is flushed after each
+/// newline rather than block-buffered, ensuring timely output to the consumer.
 var info = stat()
 fstat(STDOUT_FILENO, &info)
 
