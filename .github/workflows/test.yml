@@ -43,13 +43,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        step: ["main-snapshot", "6.3", "6.2", "6.1"]
+        step: ["main-snapshot", "6.4", "6.3", "6.2", "6.1"]
         include:
           - step: "main-snapshot"
             xcode: "26.4"
             swiftly: "main-snapshot"
             continueOnError: true
             macos: "macos-26"
+          - step: "6.4"
+            xcode: "27.1"
+            macos: "xcode-27"
           - step: "6.3"
             xcode: "26.4"
             macos: "macos-26"
@@ -61,6 +64,10 @@ jobs:
             macos: "macos-15"
     runs-on: ${{ matrix.macos }}
     continue-on-error: ${{ matrix.continueOnError == true }}
+    env:
+      swift_build: swift build --build-system native
+      swift_test: swift test --build-system native
+      periphery_scan: ./.build/debug/periphery scan --quiet --clean-build --strict -- --build-system native
     steps:
     - uses: actions/checkout@master
     - name: Select Xcode version
@@ -79,12 +86,37 @@ jobs:
     - name: Install Swift (Swiftly)
       if: ${{ matrix.swiftly }}
       run: swiftly install ${{ matrix.swiftly }} --use
+    - name: Prepare nightly toolchain for Xcode
+      if: ${{ matrix.swiftly }}
+      run: |
+        TOOLCHAIN_PATH=$(swiftly use --print-location)
+        TOOLCHAIN_ID=$(plutil -extract CFBundleIdentifier raw -o - "$TOOLCHAIN_PATH/Info.plist")
+        XCODE_LINKER=$(xcrun --toolchain com.apple.dt.toolchain.XcodeDefault --find ld)
+        # Remove this link when Swift snapshots include ld: https://github.com/swiftlang/swift/issues/89035
+        ln -s "$XCODE_LINKER" "$TOOLCHAIN_PATH/usr/bin/ld"
+        printf '%s\n' "$TOOLCHAIN_PATH/usr/bin" >> "$GITHUB_PATH"
+        printf 'TOOLCHAINS=%s\n' "$TOOLCHAIN_ID" >> "$GITHUB_ENV"
     - name: Get Swift Version
       id: get-swift-version
+      env:
+        EXPECTED_SWIFT_VERSION: ${{ matrix.step }}
       run: |
-        swift_version=$(swift -version | head -n 1 | sed s/,//)
-        echo "$swift_version"
-        echo "SWIFT_VERSION=${swift_version}" >> "$GITHUB_ENV"
+        SWIFT_VERSION=$(swift --version)
+        XCRUN_SWIFT_VERSION=$(xcrun swift --version)
+        if [[ "$SWIFT_VERSION" != "$XCRUN_SWIFT_VERSION" ]]; then
+          printf 'swift and xcrun swift must use the same toolchain\n%s\n%s\n' "$SWIFT_VERSION" "$XCRUN_SWIFT_VERSION" >&2
+          exit 1
+        fi
+        if [[ "$EXPECTED_SWIFT_VERSION" != main-snapshot && "$SWIFT_VERSION" != *"Swift version $EXPECTED_SWIFT_VERSION"* ]]; then
+          printf 'Expected Swift %s, received %s\n' "$EXPECTED_SWIFT_VERSION" "$SWIFT_VERSION" >&2
+          exit 1
+        fi
+        printf '%s\n' "$SWIFT_VERSION"
+        SWIFT_VERSION=${SWIFT_VERSION%%$'\n'*}
+        printf 'SWIFT_VERSION=%s\n' "${SWIFT_VERSION//,/}" >> "$GITHUB_ENV"
+        xcodebuild -version
+        xcrun --find swift
+        xcrun --find ld
       shell: bash
     - name: Cache resolved dependencies
       id: cache-resolved-dependencies
@@ -102,7 +134,7 @@ jobs:
     - name: Build
       run: ${{ env.swift_build }}
     - name: Scan
-      run: ${{ env.periphery_scan }} ${{ matrix.baseline && format('--baseline baselines/{0}', matrix.baseline) || '' }}
+      run: ${{ env.periphery_scan }}
     - name: Test
       run: ${{ env.swift_test }}
   linux:

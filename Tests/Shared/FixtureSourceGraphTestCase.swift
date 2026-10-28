@@ -7,7 +7,8 @@ class FixtureSourceGraphTestCase: SPMSourceGraphTestCase {
     override static func setUp() {
         super.setUp()
 
-        build(projectPath: FixturesProjectPath)
+        let configuration = nativeBuildConfiguration()
+        build(projectPath: FixturesProjectPath, configuration: configuration)
     }
 
     @discardableResult
