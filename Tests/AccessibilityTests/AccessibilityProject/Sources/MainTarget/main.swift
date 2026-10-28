@@ -101,5 +101,7 @@ RedundantPublicClassUsedAsExtensionSameTypeGenericRequirementRetainer().retain()
 let _: PublicTypeUsedInPublicGenericTypealias_Alias<Int>? = nil
 RedundantPublicTypeUsedInInternalTypealiasRetainer().retain()
 
+// Cross-module protocol witness
+retainCrossModuleProtocolWitnesses()
 _ = PublicTypeUsedAsGenericStructExtensionWhereClause_Container().elementCount()
 takePublicFunctionWhereClause([])

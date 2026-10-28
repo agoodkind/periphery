@@ -367,6 +367,17 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
         assertRedundantPublicAccessibility(.struct("RedundantPublicTypeUsedInInternalTypealias"))
     }
 
+    // The conforming type is internal, so the witness only needs to be internal: `public` is redundant even though the
+    // protocol is public and declared in another module (swiftc accepts the witness without `public`).
+    func testInternalTypeWitnessingCrossModulePublicProtocol() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.protocol("PublicProtocolWithStaticRequirementUsedByExtension"))
+        assertNotRedundantPublicAccessibility(.class("InternalClassWitnessingCrossModuleProtocol")) {
+            self.assertRedundantPublicAccessibility(.varStatic("bundleName"))
+        }
+    }
+
     func testPublicComparableOperatorFunction() {
         index()
 
