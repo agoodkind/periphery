@@ -62,11 +62,13 @@ extension SPMProjectDriver: ProjectDriver {
             configuration: configuration
         )
         let sourceFiles = try collector.collect()
-        let xibPaths = interfaceBuilderFiles(from: description)
+        let xibPaths = projectFiles(of: .interfaceBuilder, from: description)
+        let xcDataModelPaths = projectFiles(of: .xcDataModel, from: description)
 
         return IndexPlan(
             sourceFiles: sourceFiles,
-            xibPaths: xibPaths
+            xibPaths: xibPaths,
+            xcDataModelPaths: xcDataModelPaths
         )
     }
 
@@ -76,17 +78,17 @@ extension SPMProjectDriver: ProjectDriver {
         description.targets.filter(\.isTestTarget).mapSet(\.name)
     }
 
-    private func interfaceBuilderFiles(from description: PackageDescription) -> Set<FilePath> {
-        var xibFiles: Set<FilePath> = []
-        let extensions = ProjectFileKind.interfaceBuilder.extensions
+    private func projectFiles(of kind: ProjectFileKind, from description: PackageDescription) -> Set<FilePath> {
+        var files: Set<FilePath> = []
+        let extensions = kind.extensions
 
         for target in description.targets {
             let targetPath = pkg.path.appending(target.path)
 
-            // SwiftPM processes Interface Builder files implicitly, without a `resources:` declaration,
+            // SwiftPM processes Interface Builder files and Core Data models implicitly, without a `resources:` declaration,
             // and `swift package describe` only lists the declared resources.
             for ext in extensions {
-                xibFiles.formUnion(FilePath.glob("\(targetPath.string)/**/*.\(ext)"))
+                files.formUnion(FilePath.glob("\(targetPath.string)/**/*.\(ext)"))
             }
 
             guard let resources = target.resources else { continue }
@@ -98,14 +100,14 @@ extension SPMProjectDriver: ProjectDriver {
                     ? resourceFilePath
                     : targetPath.appending(resource.path)
 
-                // Check if the resource path exists and is a xib/storyboard file
+                // Check if the resource path exists and has an extension of this kind
                 guard resourcePath.exists else { continue }
                 guard let ext = resourcePath.extension?.lowercased(), extensions.contains(ext) else { continue }
 
-                xibFiles.insert(resourcePath.lexicallyNormalized())
+                files.insert(resourcePath.lexicallyNormalized())
             }
         }
 
-        return xibFiles
+        return files
     }
 }
