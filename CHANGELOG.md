@@ -25,6 +25,7 @@
 ##### Bug Fixes
 
 - `#Preview` expansions that preview a used SwiftUI view are now retained together with the code they reference, so helpers used only from a live preview are no longer reported as unused; previews of unused code stay unused. Fixes #15.
+- `public` members inside a non-public extension of a non-public type are now reported as redundant public accessibility; extensions of external types are assumed public. Fixes #45.
 
 ## 3.8.9 (2026-10-28)
 
