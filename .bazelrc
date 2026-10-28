@@ -1,1 +1,5 @@
 common --enable_bzlmod
+
+# CI only (.github/workflows/test.yml): persistent caches restored by actions/cache.
+build:ci --disk_cache=~/.cache/bazel-disk
+build:ci --repository_cache=~/.cache/bazel-repo
