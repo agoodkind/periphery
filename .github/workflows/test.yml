@@ -36,3 +36,22 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+  bazel:
+    # Guards the Bazel build: BUILD.bazel lists sources explicitly, so a Swift
+    # file missing from `srcs` only fails here. Not verified locally (no bazel).
+    name: Bazel
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazelbuild/setup-bazelisk@v3
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+            ~/.cache/bazelisk
+          key: ${{ runner.os }}-bazel-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-
+      - name: Build
+        run: bazel build //:periphery
