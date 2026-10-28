@@ -367,10 +367,10 @@ For example, with `--retain-public --no-retain-spi Internal`, Periphery will:
 This is particularly useful for internal SPIs that should be audited for unused code while still retaining the framework's public API.
 ### Localized Strings
 
-Periphery can identify unused localized strings in String Catalog (`.xcstrings`) files. It detects keys used via `NSLocalizedString`, `String(localized:)`, `LocalizedStringKey`, `LocalizedStringResource`, `Text`, and `Bundle.localizedString(forKey:)`. This analysis can be disabled with `--disable-unused-localized-string-analysis`.
+Periphery can identify unused localized strings in String Catalog (`.xcstrings`) files. It detects keys used via `NSLocalizedString`, `String(localized:)`, `LocalizedStringKey`, `LocalizedStringResource`, `Text`, and `Bundle.localizedString(forKey:)`. Catalogues are discovered from Xcode target resources (including synchronized folders), SPM target `resources`, Bazel `AppleResourceInfo` and the `xcstrings` key of a generic project configuration. This analysis can be disabled with `--disable-unused-localized-string-analysis` (or `disable_unused_localized_string_analysis: true` in `.periphery.yml`).
 
 > [!NOTE]
-> Only static string literals are detected. Dynamic keys (e.g., `String(localized: variable)`) cannot be analyzed and may result in false positives. Where possible, refactor dynamic keys to use conditional expressions with static literals:
+> Only static string literals are detected, and keys are matched regardless of the `table:`/`bundle:` arguments. Keys referenced through Xcode 26+ generated symbols (e.g. `Text(.myKey)`) are not yet detected. Dynamic keys (e.g., `String(localized: variable)`) cannot be analyzed and may result in false positives. Where possible, refactor dynamic keys to use conditional expressions with static literals:
 > ```swift
 > var message: String {
 >     if condition {
