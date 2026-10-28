@@ -39,5 +39,11 @@
                 self.assertNotReferenced(.functionMethodInstance("unusedExtensionAction(_:)"))
             }
         }
+
+        func testRetainsCoreDataValueTransformersFromModels() {
+            assertReferenced(.class("SPMImplicitModelTransformer"))
+            assertReferenced(.class("SPMDeclaredModelTransformer"))
+            assertNotReferenced(.class("SPMUnusedModelTransformer"))
+        }
     }
 #endif

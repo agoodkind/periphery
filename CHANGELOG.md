@@ -10,7 +10,7 @@
 
 ##### Bug Fixes
 
-- None.
+- The SPM driver now indexes `.xcdatamodeld` Core Data models, declared or implicit, under each target folder, so classes referenced only by a model (e.g. value transformers) are no longer reported as unused. Fixes #33.
 
 ## 3.8.8 (2026-10-27)
 
