@@ -22,7 +22,7 @@ public extension String {
         return newString
     }
 
-    // http://www.cse.yorku.ca/~oz/hash.html
+    /// http://www.cse.yorku.ca/~oz/hash.html
     @inlinable var djb2: Int {
         unicodeScalars
             .map(\.value)

@@ -21,7 +21,7 @@ final class UsedDeclarationMarker: SourceGraphMutator {
 
     // MARK: - Private
 
-    // Removes references from protocol member decls to conforming decls that have a dereferenced ancestor.
+    /// Removes references from protocol member decls to conforming decls that have a dereferenced ancestor.
     private func removeErroneousProtocolReferences() {
         // Evaluate ancestor dereference status from a stable pre-mutation snapshot to avoid
         // order-dependent behavior when iterating sets and removing references.

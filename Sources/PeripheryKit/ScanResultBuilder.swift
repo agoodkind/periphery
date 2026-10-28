@@ -99,7 +99,9 @@ public enum ScanResultBuilder {
             // Protocol members naturally accumulate related references from conformances and
             // default implementations even when genuinely unused. Only normal references indicate
             // actual usage.
-            if isProtocolMember, ref.kind != .normal { continue }
+            if isProtocolMember, ref.kind != .normal {
+                continue
+            }
 
             if graph.commandIgnoredDeclarations[parent] == nil {
                 if graph.usedDeclarations.contains(parent) {
