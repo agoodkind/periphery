@@ -14,12 +14,48 @@ final class SwiftUIRetainer: SourceGraphMutator {
     }
 
     func mutate() {
+        associateStatePropertyReads()
         retainSpecialProtocolConformances()
         retainApplicationDelegateAdaptors()
         unretainPreviewMacroExpansions()
     }
 
     // MARK: - Private
+
+    private func associateStatePropertyReads() {
+        for reference in graph.allReferences where reference.isExplicitRead {
+            guard let generated = graph.declaration(withUsr: reference.usr),
+                  generated.isImplicit,
+                  generated.kind == .varInstance
+            else { continue }
+            guard generated.name.hasPrefix("$") || generated.name.hasPrefix("_") else { continue }
+            guard let owner = generated.parent else { continue }
+
+            let propertyName = String(generated.name.dropFirst())
+            let properties = owner.declarations.filter {
+                !$0.isImplicit && $0.kind == .varInstance && $0.name == propertyName &&
+                    $0.references.contains(where: { $0.usr == "s:7SwiftUI5Stateyycfm" })
+            }
+            guard properties.count == 1, let property = properties.first else { continue }
+
+            // Preserve the source caller. Implicit state accessors are retained independently.
+            for usr in property.usrs {
+                let read = Reference(
+                    name: property.name,
+                    kind: .normal,
+                    declarationKind: property.kind,
+                    usr: usr,
+                    location: reference.location
+                )
+                read.parent = reference.parent
+                if let parent = read.parent {
+                    graph.add(read, from: parent)
+                } else {
+                    graph.addRootReference(read)
+                }
+            }
+        }
+    }
 
     private func retainSpecialProtocolConformances() {
         var names = Self.specialProtocolNames

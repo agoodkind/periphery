@@ -195,6 +195,11 @@ public final class SourceGraph {
         allReferencesByUsr[reference.usr, default: []].insert(reference)
     }
 
+    func addRootReference(_ reference: Reference) {
+        rootReferences.insert(reference)
+        add(reference)
+    }
+
     public func add(_ references: Set<Reference>) {
         allReferences.formUnion(references)
         references.forEach { allReferencesByUsr[$0.usr, default: []].insert($0) }
