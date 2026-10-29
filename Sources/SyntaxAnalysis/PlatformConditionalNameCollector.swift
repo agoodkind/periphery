@@ -40,7 +40,7 @@ public final class PlatformConditionalNameCollector: SyntaxVisitor {
             let annotatedTypeNames = AnnotatedTypeNameCollector.collect(in: elements)
 
             for token in elements.tokens(viewMode: .sourceAccurate) {
-                guard case .identifier = token.tokenKind else { continue }
+                guard case .identifier = token.tokenKind, isReference(token) else { continue }
 
                 let name = token.identifier?.name ?? token.text
                 var use = names[name, default: PlatformConditionalNameUse()]
@@ -59,6 +59,22 @@ public final class PlatformConditionalNameCollector: SyntaxVisitor {
     }
 
     // MARK: - Private
+
+    /// `isReference` returns `true` when the token is the name in a `DeclReferenceExprSyntax`,
+    /// `IdentifierTypeSyntax`, `MemberTypeSyntax`, `MacroExpansionExprSyntax`, or `MacroExpansionDeclSyntax`.
+    /// It returns `false` for declaration names, parameter names, argument labels, and other tokens
+    /// that do not refer to a declaration.
+    /// `PlatformConditionalRetainer` does not retain a declaration inside a platform-conditional `#if` block
+    /// merely because its own name appears in that block.
+    private func isReference(_ token: TokenSyntax) -> Bool {
+        guard let parent = token.parent else { return false }
+
+        return parent.is(DeclReferenceExprSyntax.self)
+            || parent.is(IdentifierTypeSyntax.self)
+            || parent.is(MemberTypeSyntax.self)
+            || parent.is(MacroExpansionExprSyntax.self)
+            || parent.is(MacroExpansionDeclSyntax.self)
+    }
 
     /// The function returns the name before the dot when the token is the member name in `Base.member` or
     /// `Base().member`.
