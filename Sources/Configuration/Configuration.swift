@@ -80,8 +80,17 @@ public final class Configuration {
     @Setting(key: "disable_redundant_public_analysis", defaultValue: false)
     public var disableRedundantPublicAnalysis: Bool
 
+    @Setting(key: "disable_platform_conditional_retention", defaultValue: false)
+    public var disablePlatformConditionalRetention: Bool
+
     @Setting(key: "disable_unused_import_analysis", defaultValue: false)
     public var disableUnusedImportAnalysis: Bool
+
+    @Setting(key: "disable_unused_localized_string_analysis", defaultValue: false)
+    public var disableUnusedLocalizedStringAnalysis: Bool
+
+    @Setting(key: "localized_string_catalog_exclude", defaultValue: ["**/InfoPlist.xcstrings", "**/AppShortcuts.xcstrings"])
+    public var localizedStringCatalogExclude: [String]
 
     @Setting(key: "superfluous_ignore_comments", defaultValue: true)
     public var superfluousIgnoreComments: Bool
@@ -215,12 +224,14 @@ public final class Configuration {
         retainFilesMatchers = buildFilenameMatchers(with: retainFiles)
         reportExcludeMatchers = buildFilenameMatchers(with: reportExclude)
         reportIncludeMatchers = buildFilenameMatchers(with: reportInclude)
+        localizedStringCatalogExcludeMatchers = buildFilenameMatchers(with: localizedStringCatalogExclude)
     }
 
     public var indexExcludeMatchers: [FilenameMatcher] = []
     public var retainFilesMatchers: [FilenameMatcher] = []
     public var reportExcludeMatchers: [FilenameMatcher] = []
     public var reportIncludeMatchers: [FilenameMatcher] = []
+    public var localizedStringCatalogExcludeMatchers: [FilenameMatcher] = []
 
     // MARK: - Private
 
@@ -228,7 +239,7 @@ public final class Configuration {
         $project, $schemes, $excludeTargets, $excludeTests, $indexExclude, $reportExclude, $reportInclude, $outputFormat,
         $retainPublic, $noRetainSPI, $retainFiles, $retainAssignOnlyProperties, $retainAssignOnlyPropertyTypes, $retainObjcAccessible,
         $retainObjcAnnotated, $retainUnusedProtocolFuncParams, $retainSwiftUIPreviews, $disableRedundantPublicAnalysis,
-        $disableUnusedImportAnalysis, $superfluousIgnoreComments, $retainUnusedImportedModules,
+        $disablePlatformConditionalRetention, $disableUnusedImportAnalysis, $disableUnusedLocalizedStringAnalysis, $localizedStringCatalogExclude, $superfluousIgnoreComments, $retainUnusedImportedModules,
         $externalEncodableProtocols, $externalCodableProtocols, $externalTestCaseClasses, $verbose, $quiet, $color,
         $disableUpdateCheck, $strict, $indexStorePath,
         $skipBuild, $skipSchemesValidation, $cleanBuild, $buildArguments, $xcodeListArguments, $relativeResults,
@@ -291,7 +302,9 @@ protocol AbstractSetting {
         set { value = setter(newValue) ?? defaultValue }
     }
 
-    public var projectedValue: Setting { self }
+    public var projectedValue: Setting {
+        self
+    }
 
     var hasNonDefaultValue: Bool {
         value != defaultValue

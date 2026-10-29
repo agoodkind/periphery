@@ -373,10 +373,112 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsDeclarationsUnavailableOnPlatform() {
+        analyze(retainPublic: true) {
+            assertReferenced(.class("FixtureClass223")) {
+                self.assertReferenced(.functionMethodInstance("unavailableOnIOS()"))
+                self.assertReferenced(.functionMethodInstance("unavailableOnMacOS()"))
+                self.assertReferenced(.functionMethodInstance("unavailableOnTvOS()"))
+                self.assertNotReferenced(.functionMethodInstance("introducedOnMacOS()"))
+                self.assertNotReferenced(.functionMethodInstance("unusedMethod()"))
+            }
+            assertReferenced(.class("FixtureClass224")) {
+                self.assertReferenced(.functionMethodInstance("someMethod()"))
+            }
+        }
+    }
+
+    func testRetainsDeclarationsReferencedInPlatformConditionalBlocks() {
+        analyze(retainPublic: true) {
+            assertReferenced(.class("FixtureClass225")) {
+                self.assertReferenced(.functionMethodInstance("onlyUsedOnIOS()"))
+                self.assertReferenced(.varInstance("onlyUsedOnIOSProperty"))
+                self.assertReferenced(.functionMethodInstance("onlyUsedOnWindows()"))
+                self.assertNotReferenced(.functionMethodInstance("onlyUsedUnderCustomFlag()"))
+                self.assertNotReferenced(.functionMethodInstance("unusedMethod()"))
+            }
+        }
+    }
+
+    func testRetainsPropertyWrapperReferencedInNegatedPlatformConditionalBlock() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct227")) {
+                self.assertReferenced(.varInstance("sizeClass"))
+                self.assertNotReferenced(.varInstance("unusedSizeClass"))
+            }
+        }
+    }
+
+    func testRetainsMacroStatePropertyReferencedOnlyViaProjectedValue() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct228")) {
+                self.assertReferenced(.varInstance("onlyProjected"))
+                self.assertNotReferenced(.varInstance("unusedState"))
+            }
+        }
+    }
+
+    func testRetainsMacroStatePropertyReferencedOnlyViaBackingStorage() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct229")) {
+                self.assertReferenced(.varInstance("onlyBacking"))
+                self.assertNotReferenced(.varInstance("unusedState"))
+            }
+        }
+    }
+
+    /// Under Xcode 27 only `@State` is an attached macro in SwiftUI; `@Environment`, `@FocusState`, `@AppStorage`,
+    /// `@SceneStorage`, `@StateObject` and `@Binding` remain property wrappers, whose `$foo` references
+    /// resolve to the wrapped property. Pinned so a toolchain change surfaces here.
+    func testRetainsPropertyWrapperPropertiesReferencedOnlyViaProjectedValue() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct230")) {
+                self.assertReferenced(.varInstance("dismiss"))
+                self.assertReferenced(.varInstance("focused"))
+                self.assertReferenced(.varInstance("stored"))
+                self.assertReferenced(.varInstance("scene"))
+                self.assertReferenced(.varInstance("model"))
+                self.assertReferenced(.varInstance("binding"))
+                self.assertNotReferenced(.varInstance("unusedEnvironment"))
+                self.assertNotReferenced(.varInstance("unusedFocus"))
+                self.assertNotReferenced(.varInstance("unusedStored"))
+            }
+        }
+    }
+
+    /// Assigning the backing storage (`_foo = State(wrappedValue:)`) under Xcode 27 `@State` still retains `foo`,
+    /// so there is no false negative for the explicit-initializer pattern. Pinned to detect toolchain changes.
+    func testRetainsMacroStatePropertyInitializedViaBackingStorage() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct231")) {
+                self.assertReferenced(.varInstance("assignedViaBacking"))
+            }
+        }
+    }
+
+    func testDoesNotRetainPlatformConditionalDeclarationsWhenDisabled() {
+        analyze(retainPublic: true, disablePlatformConditionalRetention: true) {
+            assertReferenced(.class("FixtureClass226")) {
+                self.assertNotReferenced(.functionMethodInstance("unavailableOnIOS()"))
+                self.assertNotReferenced(.functionMethodInstance("onlyUsedOnIOS()"))
+            }
+        }
+    }
+
     func testRetainsDefaultConstructor() {
         analyze(retainPublic: true) {
             assertReferenced(.class("FixtureClass41")) {
                 self.assertReferenced(.functionConstructor("init()"))
+            }
+        }
+    }
+
+    func testRetainPublicMacroAndMiscKinds() {
+        analyze(retainPublic: true) {
+            assertReferenced(.macro("FixtureRetainPublicMacro()"))
+            assertNotReferenced(.macro("FixtureInternalMacro()"))
+            assertReferenced(.protocol("FixtureRetainPublicProtocol")) {
+                self.assertReferenced(.associatedtype("FixtureRetainPublicAssoc"))
             }
         }
     }
@@ -931,6 +1033,23 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsAllResultBuilderEntryPoints() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureResultBuilderPartial")) {
+                self.assertReferenced(.functionMethodStatic("buildPartialBlock(first:)"))
+                self.assertReferenced(.functionMethodStatic("buildPartialBlock(accumulated:next:)"))
+                self.assertNotReferenced(.functionMethodStatic("unusedHelper()"))
+            }
+            assertReferenced(.struct("FixtureResultBuilderArities")) {
+                self.assertReferenced(.functionMethodStatic("buildBlock()"))
+                self.assertReferenced(.functionMethodStatic("buildBlock(_:_:)"))
+                self.assertReferenced(.functionMethodStatic("buildBlock(_:)"))
+                self.assertReferenced(.functionMethodStatic("buildEither(first:)"))
+                self.assertNotReferenced(.functionMethodStatic("unusedHelper()"))
+            }
+        }
+    }
+
     func testRetainsCallAsFunction() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct1")) {
@@ -1090,8 +1209,8 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
-    // https://github.com/apple/swift/issues/64686
-    // https://github.com/peripheryapp/periphery/issues/264
+    /// https://github.com/apple/swift/issues/64686
+    /// https://github.com/peripheryapp/periphery/issues/264
     func testSelfReferencedConstructor() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct3")) {
@@ -1106,7 +1225,7 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
-    // https://github.com/apple/swift/issues/56541
+    /// https://github.com/apple/swift/issues/56541
     func testStaticMemberUsedAsSubscriptKey() {
         analyze(retainPublic: true) {
             assertReferenced(.enum("FixtureEnum128")) {
@@ -1221,6 +1340,45 @@ final class RetentionTest: FixtureSourceGraphTestCase {
             assertReferenced(.class("Fixture308Class")) {
                 self.assertReferenced(.functionMethodInstance("someFunc()"))
                 self.assertReferenced(.functionConstructor("init(string:)"))
+            }
+        }
+    }
+
+    /// Issue #9: an ignore comment trailing the opening brace of an extension or type must cover all its members,
+    /// including subscripts and other declarations without a simple name, and must not leak to other extensions.
+    func testIgnoreCommentOnFirstLineOfExtension() {
+        analyze(retainPublic: false) {
+            assertReferenced(.extensionStruct("String")) {
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+                self.assertReferenced(.functionConstructor("init(fixtureIssue9Value:)"))
+                self.assertReferenced(.varInstance("fixtureIssue9Computed"))
+                self.assertReferenced(.functionOperatorInfix("-(_:_:)"))
+                self.assertReferenced(.functionMethodInstance("fixtureIssue9Func()"))
+            }
+            assertReferenced(.extensionStruct("Int")) {
+                self.assertReferenced(.functionSubscript("subscript(fixtureIssue9Offset:)"))
+                self.assertReferenced(.functionMethodInstance("fixtureIssue9IntFunc()"))
+            }
+            assertReferenced(.struct("FixtureIssue9Struct")) {
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+                self.assertReferenced(.functionMethodInstance("fixtureIssue9StructFunc()"))
+            }
+            assertReferenced(.class("FixtureIssue9Class")) {
+                self.assertReferenced(.functionDestructor("deinit"))
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+            }
+            assertReferenced(.extensionStruct("Array")) {
+                self.assertReferenced(.functionSubscript("subscript(fixtureIssue9Safe:)"))
+            }
+            assertReferenced(.extensionStruct("Set")) {
+                self.assertReferenced(.functionSubscript("subscript(fixtureIssue9Member:)"))
+            }
+            assertReferenced(.extensionStruct("Substring")) {
+                self.assertReferenced(.functionSubscript("subscript(_:)"))
+            }
+            assertReferenced(.extensionStruct("Double")) {
+                self.assertNotReferenced(.functionSubscript("subscript(fixtureIssue9Control:)"))
+                self.assertNotReferenced(.functionMethodInstance("fixtureIssue9ControlFunc()"))
             }
         }
     }

@@ -32,12 +32,14 @@
     - [Assign-only Properties](#assign-only-properties)
     - [Redundant Public Accessibility](#redundant-public-accessibility)
     - [Unused Imports](#unused-imports)
+    - [Platform Conditionals](#platform-conditionals)
     - [Objective-C](#objective-c)
     - [Codable](#codable)
     - [Equatable and Hashable](#equatable-and-hashable)
     - [XCTestCase](#xctestcase)
     - [Interface Builder](#interface-builder)
     - [SPI (System Programming Interface)](#spi-system-programming-interface)
+    - [Localized Strings](#localized-strings)
 - [Comment Commands](#comment-commands)
 - [Xcode Integration](#xcode-integration)
 - [Excluding Files](#excluding-files)
@@ -302,6 +304,15 @@ Periphery can only detect unused imports of targets it has scanned. It cannot de
 
 Periphery will likely produce false positives for targets with mixed Swift and Objective-C, as Periphery cannot scan the Objective-C files. It is recommended, therefore, to disable unused import detection for projects with a significant amount of Objective-C or manually exclude the mixed language targets from the results.
 
+### Platform Conditionals
+
+The index store only describes the platform Periphery built for, so code that is only used on another platform would be reported as unused. To avoid these false positives, Periphery retains:
+
+- Declarations marked `@available(<platform>, unavailable)` (e.g. `@available(tvOS, unavailable)`), along with their members. `@available(*, unavailable)`, `swift` and `*ApplicationExtension` platforms are not affected.
+- Declarations whose name is written inside an `#if` block conditioned on `os()`, `targetEnvironment()`, `arch()` or `canImport()`, including its `#else` branches. Matching is done by name on the syntax tree, so unrelated declarations that share the name are retained too.
+
+This can be disabled with `--disable-platform-conditional-retention`. Other conditions, such as `#if DEBUG`, are not covered, see [Code referenced within a preprocessor macro conditional branch is unused](#code-referenced-within-a-preprocessor-macro-conditional-branch-is-unused).
+
 ### Objective-C
 
 Periphery cannot analyze Objective-C code since types may be dynamically typed.
@@ -328,6 +339,8 @@ Any class that inherits `XCTestCase` is automatically retained along with its te
 
 If your project contains Interface Builder files (such as storyboards and XIBs), Periphery will take these into account when identifying unused declarations. Periphery parses these files to identify which classes, `@IBOutlet` properties, `@IBAction` methods, and `@IBInspectable` properties are actually referenced. Only those members that are connected in the Interface Builder file will be retained. Any `@IB*` members that are declared but not connected will be reported as unused.
 
+Files inside Xcode 16+ synchronized folders (`PBXFileSystemSynchronizedRootGroup`) are supported: they are collected per target, honouring each target's membership exceptions.
+
 ### SPI (System Programming Interface)
 
 Swift's `@_spi` attribute marks declarations as pseudo-private, making them accessible only to clients that explicitly import the SPI. While these declarations are technically `public`, they're intended for internal or restricted use.
@@ -340,6 +353,39 @@ For example, with `--retain-public --no-retain-spi Internal`, Periphery will:
 - **Check** `@_spi(Internal) public` declarations for unused code
 
 This is particularly useful for internal SPIs that should be audited for unused code while still retaining the framework's public API.
+
+### Localized Strings
+
+Periphery can identify unused localized strings in String Catalog (`.xcstrings`) files. Catalogues are discovered from Xcode target resources (including synchronized folders), SPM target `resources`, Bazel `AppleResourceInfo` and the `xcstrings` key of a generic project configuration. This analysis can be disabled with `--disable-unused-localized-string-analysis` (or `disable_unused_localized_string_analysis: true` in `.periphery.yml`).
+
+A key is considered used when a static string literal with the same value is:
+
+- Passed to a parameter of type `LocalizedStringKey`, `LocalizedStringResource`, `String.LocalizationValue`, `DisplayRepresentation` or `IntentDescription` (including optionals, arrays and variadics). The parameter type is resolved from the index store, so this covers SwiftUI initializers and modifiers (`Text`, `Button`, `Label`, `Toggle`, `Section`, `navigationTitle`, ...), `String(localized:)`, as well as your own functions and initializers. A literal passed to a plain `String` parameter (e.g. `Label("title", systemImage: "star")`'s `systemImage`) is not considered a key.
+- Passed to `NSLocalizedString`, `Bundle.localizedString(forKey:)`, `LocalizedStringKey(_:)`, `LocalizedStringResource(_:)` or `Text(_:)`, matched by name.
+- Assigned to, returned from, or used as the default value of a declaration annotated with one of the types above (e.g. `static let title: LocalizedStringResource = "key"`).
+
+When the called function cannot be resolved (e.g. calling a closure, an enum case constructor or an Objective-C method), the literals passed to it are conservatively considered keys. Ternaries and array literals of string literals are looked through.
+
+Catalogues matching the `--localized-string-catalog-exclude` globs (`localized_string_catalog_exclude` in `.periphery.yml`) are not analysed. By default `**/InfoPlist.xcstrings` and `**/AppShortcuts.xcstrings` are excluded, since their keys are consumed by the system rather than referenced from Swift source. Setting the option replaces the default list, so include these patterns if you add your own:
+
+```yaml
+localized_string_catalog_exclude:
+  - "**/InfoPlist.xcstrings"
+  - "**/AppShortcuts.xcstrings"
+  - "**/DefaultCategories.xcstrings"
+```
+
+> [!NOTE]
+> Only static string literals are detected, and keys are matched regardless of the `table:`/`bundle:` arguments. Keys referenced through Xcode 26+ generated symbols (e.g. `Text(.myKey)`) are not yet detected. Interpolated literals (e.g. `Text("Hello \(name)")`, whose key is `Hello %@`) and dynamic keys (e.g., `String(localized: variable)`) cannot be matched to a catalogue key and may result in false positives. Keep such keys in a dedicated catalogue excluded with `localized_string_catalog_exclude`, or, where possible, refactor dynamic keys to use conditional expressions with static literals:
+> ```swift
+> var message: String {
+>     if condition {
+>         String(localized: "message_success")
+>     } else {
+>         String(localized: "message_failure")
+>     }
+> }
+> ```
 
 ## Comment Commands
 
@@ -456,7 +502,12 @@ The index store generated by `xcodebuild` exists in DerivedData at a location de
 
 ### SwiftPM
 
-By default, Periphery looks for the index store at `.build/debug/index/store`. Therefore, if you intend to run Periphery directly after calling `swift test`, you can omit the `--index-store-path` option, and Periphery will use the index store created when the project was built for testing. However, if this isn't the case, then you must provide Periphery the location of the index store with `--index-store-path`.
+By default, Periphery asks SwiftPM where it places build products (`swift build --show-bin-path`, honouring the `-c`/`--configuration`, `--scratch-path`, `--build-system` and `--triple` options passed after `--`) and looks for the index store next to them:
+
+- Swift 6.4 and later (default `swiftbuild` backend): `<scratch path>/out`, e.g. `.build/out` (it contains `v5/units` and `v5/records`).
+- The `native` backend: `<bin path>/index/store`, e.g. `.build/debug/index/store` or `.build/arm64-apple-macosx/debug/index/store`.
+
+Therefore, if you intend to run Periphery directly after calling `swift test`, you can omit the `--index-store-path` option, and Periphery will use the index store created when the project was built for testing, provided you pass the same build options (e.g. `periphery scan --skip-build -- -c release`). If no index store is found, Periphery fails and lists the locations it tried. If the project wasn't built that way, you must provide Periphery the location of the index store with `--index-store-path`.
 
 ## Build Systems
 
@@ -499,6 +550,9 @@ Periphery can analyze projects using other build systems, though it cannot drive
     ],
     "xcmappingmodels": [
         "path/to/file.xcmappingmodel"
+    ],
+    "xcstrings": [
+        "path/to/Localizable.xcstrings"
     ]
 }
 ```

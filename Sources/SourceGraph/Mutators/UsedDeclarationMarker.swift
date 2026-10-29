@@ -3,6 +3,8 @@ import Foundation
 import Shared
 
 final class UsedDeclarationMarker: SourceGraphMutator {
+    private static let swiftUIViewUsr = "s:7SwiftUI4ViewP"
+
     private let graph: SourceGraph
 
     required init(graph: SourceGraph, configuration _: Configuration, swiftVersion _: SwiftVersion) {
@@ -14,6 +16,7 @@ final class UsedDeclarationMarker: SourceGraphMutator {
         markUsed(graph.retainedDeclarations)
 
         graph.rootReferences.forEach { markUsed(declarationsReferenced(by: $0)) }
+        markLivePreviewExpansionsUsed()
 
         ignoreUnusedDescendents(in: graph.rootDeclarations,
                                 unusedDeclarations: graph.unusedDeclarations)
@@ -21,7 +24,7 @@ final class UsedDeclarationMarker: SourceGraphMutator {
 
     // MARK: - Private
 
-    // Removes references from protocol member decls to conforming decls that have a dereferenced ancestor.
+    /// Removes references from protocol member decls to conforming decls that have a dereferenced ancestor.
     private func removeErroneousProtocolReferences() {
         // Evaluate ancestor dereference status from a stable pre-mutation snapshot to avoid
         // order-dependent behavior when iterating sets and removing references.
@@ -66,6 +69,39 @@ final class UsedDeclarationMarker: SourceGraphMutator {
             for ref in declaration.related {
                 markUsed(declarationsReferenced(by: ref))
             }
+        }
+    }
+
+    /// Marks used each `#Preview` expansion that previews a used SwiftUI view, along with the code
+    /// it references. Previews that only reference unused code stay unused.
+    private func markLivePreviewExpansionsUsed() {
+        var pendingPreviews = graph.references(to: SwiftUIRetainer.previewRegistryUsr)
+            .compactMap(\.parent)
+            .filter { $0.isImplicit && !graph.isUsed($0) }
+            .mapSet { $0 }
+
+        while true {
+            let livePreviews = pendingPreviews.filter(previewsUsedView)
+            guard !livePreviews.isEmpty else { break }
+
+            pendingPreviews.subtract(livePreviews)
+            markUsed(livePreviews.flatMapSet { $0.descendentDeclarations.union([$0]) })
+        }
+    }
+
+    private func previewsUsedView(_ preview: Declaration) -> Bool {
+        ([preview] + preview.descendentDeclarations)
+            .lazy
+            .flatMap(\.references)
+            .compactMap { self.graph.declaration(withUsr: $0.usr) }
+            .contains { self.graph.isUsed($0) && self.isSwiftUIView($0) }
+    }
+
+    private func isSwiftUIView(_ declaration: Declaration) -> Bool {
+        guard [.struct, .class, .enum].contains(declaration.kind) else { return false }
+
+        return declaration.related.contains {
+            $0.declarationKind == .protocol && $0.usr == Self.swiftUIViewUsr
         }
     }
 

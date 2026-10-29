@@ -45,11 +45,13 @@ final class RedundantExplicitPublicAccessibilityMarker: SourceGraphMutator {
                 // Public accessibility is redundant.
                 mark(decl)
                 markExplicitPublicDescendentDeclarations(from: decl)
+            } else if !graph.isRetained(decl) {
+                // Note: we don't check the public descendent declarations on correctly marked publicly accessible
+                // declarations because it would lead to many warnings of questionable value. For example, it's
+                // common for a set of properties to be marked public, even if they're not yet all used cross module.
+                // Explicit public declarations nested within a non-public descendant are redundant however.
+                markExplicitPublicDescendentsOfNonPublicDescendents(from: decl)
             }
-
-            // Note: we don't check the descendent declarations on correctly marked publicly accessible declarations
-            // because it would lead to many warnings of questionable value. For example, it's common for a set of
-            // properties to be marked public, even if they're not yet all used cross module.
         } else {
             // Declaration is not explicitly public, any explicit public descendants are therefore redundant.
             markExplicitPublicDescendentDeclarations(from: decl)
@@ -57,15 +59,45 @@ final class RedundantExplicitPublicAccessibilityMarker: SourceGraphMutator {
     }
 
     private func validateExtension(_ decl: Declaration) throws {
+        let extendedDecl = try graph.extendedDeclaration(forExtension: decl)
+
         if decl.accessibility.isExplicitly(.public) {
             // If the extended kind is already marked as having redundant public accessibility, then this extension
             // must also have redundant accessibility.
-            if let extendedDecl = try graph.extendedDeclaration(forExtension: decl),
-               graph.redundantPublicAccessibility.keys.contains(extendedDecl)
-            {
+            if let extendedDecl, graph.redundantPublicAccessibility.keys.contains(extendedDecl) {
                 mark(decl)
             }
         }
+
+        // Extensions of external types are assumed to be publicly accessible.
+        guard let extendedDecl else {
+            markExplicitPublicDescendentsOfNonPublicDescendents(from: decl)
+            return
+        }
+
+        if try isEffectivelyPublic(extendedDecl) {
+            markExplicitPublicDescendentsOfNonPublicDescendents(from: decl)
+        } else {
+            // The extended declaration is not publicly accessible, nor are the members of this extension.
+            markExplicitPublicDescendentDeclarations(from: decl)
+        }
+    }
+
+    /// Whether the declaration is accessible cross module, taking its parents into account, and is not itself marked as
+    /// having redundant public accessibility.
+    private func isEffectivelyPublic(_ decl: Declaration) throws -> Bool {
+        if decl.kind.isExtensionKind {
+            guard let extendedDecl = try graph.extendedDeclaration(forExtension: decl) else { return true }
+
+            return try isEffectivelyPublic(extendedDecl)
+        }
+
+        guard decl.accessibility.isAccessibleCrossModule,
+              !graph.redundantPublicAccessibility.keys.contains(decl)
+        else { return false }
+        guard let parent = decl.parent else { return true }
+
+        return try isEffectivelyPublic(parent)
     }
 
     private func mark(_ decl: Declaration) {
@@ -78,6 +110,16 @@ final class RedundantExplicitPublicAccessibilityMarker: SourceGraphMutator {
     private func markExplicitPublicDescendentDeclarations(from decl: Declaration) {
         for descDecl in descendentPublicDeclarations(from: decl) {
             mark(descDecl)
+        }
+    }
+
+    private func markExplicitPublicDescendentsOfNonPublicDescendents(from decl: Declaration) {
+        for childDecl in decl.declarations where !childDecl.isImplicit {
+            if childDecl.accessibility.isAccessibleCrossModule {
+                markExplicitPublicDescendentsOfNonPublicDescendents(from: childDecl)
+            } else {
+                markExplicitPublicDescendentDeclarations(from: childDecl)
+            }
         }
     }
 
@@ -113,7 +155,9 @@ final class RedundantExplicitPublicAccessibilityMarker: SourceGraphMutator {
                     }
 
                     return $0.parent
-                } else if decl.attributes.contains(where: { $0.name == "propertyWrapper" }) {
+                } else if decl.attributes.contains(where: { $0.name == "propertyWrapper" || $0.name == "resultBuilder" }) {
+                    // Property wrappers and result builders are applied as attributes, which cannot be
+                    // expressed through a publicly exposable reference role.
                     return $0.parent
                 } else if let parent = $0.parent, parent.attributes.contains(where: { $0.name == "inlinable" }) {
                     // Declarations referenced within a public @inlinable function must either be

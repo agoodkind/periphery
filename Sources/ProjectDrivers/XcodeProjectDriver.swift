@@ -60,6 +60,9 @@
                 schemes = Set(configuration.schemes)
             } else {
                 // Ensure schemes exist within the project
+                if configuration.cleanBuild {
+                    try xcodebuild.removeDerivedData(for: project, allSchemes: [])
+                }
                 schemes = try project.schemes(
                     additionalArguments: configuration.xcodeListArguments
                 ).filter { configuration.schemes.contains($0) }
@@ -136,13 +139,15 @@
             let xibPaths = targets.flatMapSet { $0.files(kind: .interfaceBuilder) }
             let xcDataModelPaths = targets.flatMapSet { $0.files(kind: .xcDataModel) }
             let xcMappingModelPaths = targets.flatMapSet { $0.files(kind: .xcMappingModel) }
+            let xcStringsPaths = targets.flatMapSet { $0.files(kind: .xcStrings) }
 
             return IndexPlan(
                 sourceFiles: sourceFiles,
                 plistPaths: infoPlistPaths,
                 xibPaths: xibPaths,
                 xcDataModelPaths: xcDataModelPaths,
-                xcMappingModelPaths: xcMappingModelPaths
+                xcMappingModelPaths: xcMappingModelPaths,
+                xcStringsPaths: xcStringsPaths
             )
         }
     }

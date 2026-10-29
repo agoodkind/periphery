@@ -37,6 +37,12 @@ ProtocolIndirectlyReferencedCrossModuleByExtensionMemberImpl().somePublicFunc()
 _ = PublicTypeUsedAsPublicPropertyTypeRetainer().retain
 _ = PublicTypeUsedAsPublicPropertyInitializer().retain
 
+// Result builder
+_ = PublicResultBuilderUser {
+    "a"
+    "b"
+}
+
 // Typealias
 let _: PublicTypealiasWithClosureType? = nil
 
@@ -85,3 +91,26 @@ takeExtensionSameTypeGenericRequirement(.defaultInstance)
 
 // Typed throws
 try? PublicTypeUsedAsPublicFunctionThrowTypeRetainer().retain()
+
+// Extension with same-type generic requirement on a class
+takeClassExtensionSameTypeGenericRequirement(.defaultClassInstance)
+takeClassExtensionSameTypeGenericRequirement(.defaultPublicExtensionInstance)
+RedundantPublicClassUsedAsExtensionSameTypeGenericRequirementRetainer().retain()
+
+// Generic typealias
+let _: PublicTypeUsedInPublicGenericTypealias_Alias<Int>? = nil
+RedundantPublicTypeUsedInInternalTypealiasRetainer().retain()
+
+// Cross-module protocol witness
+retainCrossModuleProtocolWitnesses()
+_ = PublicTypeUsedAsGenericStructExtensionWhereClause_Container().elementCount()
+takePublicFunctionWhereClause([])
+
+// Public members in non-public extensions (#45)
+PublicMemberInNonPublicExtensionRetainer().retain()
+PublicMemberInInternalNestedTypeExtension_Outer().retainInner()
+PublicMemberInInternalNestedType_Outer().retainInner()
+PublicMemberInInternalNestedTypeOfExtension_Outer().retainExtensionInner()
+PublicMemberInNonPublicExtensionOfPublicType().publicFuncInNonPublicExtensionOfPublicType()
+PublicMemberInNonPublicExtensionOfPublicType().publicFuncInNonPublicExtensionOfPublicProtocol()
+_ = "".publicFuncInExternalTypeExtension()

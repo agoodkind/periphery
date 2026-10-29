@@ -22,7 +22,8 @@ let package = Package(
         ),
         .target(
             name: "SPMProjectKit",
-            dependencies: ["SPMProjectMacros"]
+            dependencies: ["SPMProjectMacros"],
+            resources: [.copy("Localizable.xcstrings")]
         ),
         .macro(
             name: "SPMProjectMacros",

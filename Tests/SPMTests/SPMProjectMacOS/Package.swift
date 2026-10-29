@@ -18,7 +18,7 @@ let package = Package(
         ),
         .target(
             name: "SPMProjectMacOSKit",
-            resources: [.process("Resources")]
+            resources: [.process("Resources"), .copy("Localization")]
         ),
     ]
 )
