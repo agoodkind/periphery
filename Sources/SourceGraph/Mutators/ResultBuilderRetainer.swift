@@ -12,6 +12,8 @@ final class ResultBuilderRetainer: SourceGraphMutator {
         "buildEither(second:)",
         "buildArray(_:)",
         "buildBlock(_:)",
+        "buildPartialBlock(first:)",
+        "buildPartialBlock(accumulated:next:)",
         "buildFinalResult(_:)",
         "buildLimitedAvailability(_:)",
     ])

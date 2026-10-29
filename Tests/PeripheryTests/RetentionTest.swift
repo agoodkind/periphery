@@ -920,6 +920,17 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsResultBuilderPartialBlockMethods() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct225")) {
+                self.assertReferenced(.functionMethodStatic("buildPartialBlock(first:)"))
+                self.assertReferenced(.functionMethodStatic("buildPartialBlock(accumulated:next:)"))
+                self.assertNotReferenced(.functionMethodStatic("unusedMethod()"))
+            }
+            assertNotReferenced(.struct("FixtureStruct226"))
+        }
+    }
+
     func testRetainsCallAsFunction() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct1")) {
