@@ -7,6 +7,20 @@ import SourceGraph
 import SyntaxAnalysis
 import SystemPackage
 
+private struct LocalizedStringCalleePosition: Hashable {
+    let line: Int
+    let column: Int
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.line == rhs.line && lhs.column == rhs.column
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(line)
+        hasher.combine(column)
+    }
+}
+
 public struct IndexUnit {
     let store: IndexStore
     let unit: UnitReader
@@ -158,6 +172,7 @@ final class SwiftIndexer: Indexer {
         func phaseOne() throws {
             var rawDeclsByKey: [RawDeclaration.Key: [(RawDeclaration, [RawRelation])]] = [:]
             var references: Set<Reference> = []
+            let collectCalleeUsrs = !configuration.disableUnusedLocalizedStringAnalysis
 
             for unit in units {
                 for recordName in unit.unit.recordNames {
@@ -191,6 +206,14 @@ final class SwiftIndexer: Indexer {
                             ) {
                                 rawDeclsByKey[decl.key, default: []].append((decl, relations))
                             }
+                        }
+
+                        if collectCalleeUsrs, occurrence.roles.contains(.reference),
+                           !occurrence.roles.contains(.implicit),
+                           Self.calleeSymbolKinds.contains(occurrence.symbol.kind)
+                        {
+                            let position = LocalizedStringCalleePosition(line: location.line, column: location.column)
+                            self.calleeUsrsByPosition[position, default: []].insert(usr)
                         }
 
                         if occurrence.roles.contains(.reference) {
@@ -261,6 +284,9 @@ final class SwiftIndexer: Indexer {
             let multiplexingSyntaxVisitor = try MultiplexingSyntaxVisitor(file: sourceFile, swiftVersion: swiftVersion)
             let declarationSyntaxVisitor = multiplexingSyntaxVisitor.add(DeclarationSyntaxVisitor.self)
             let importSyntaxVisitor = multiplexingSyntaxVisitor.add(ImportSyntaxVisitor.self)
+            let localizedStringSyntaxVisitor: LocalizedStringSyntaxVisitor? = configuration.disableUnusedLocalizedStringAnalysis
+                ? nil
+                : multiplexingSyntaxVisitor.add(LocalizedStringSyntaxVisitor.self)
 
             multiplexingSyntaxVisitor.visit()
 
@@ -280,6 +306,18 @@ final class SwiftIndexer: Indexer {
                 }
             }
 
+            if !configuration.disablePlatformConditionalRetention {
+                let names = PlatformConditionalNameCollector.collect(from: multiplexingSyntaxVisitor.syntax)
+
+                if !names.isEmpty {
+                    graph.withLock { $0.addPlatformConditionalNames(names) }
+                }
+            }
+
+            if let localizedStringSyntaxVisitor {
+                collectUsedLocalizedStringKeys(using: localizedStringSyntaxVisitor)
+            }
+
             associateLatentReferences()
             associateDanglingReferences()
             visitDeclarations(using: declarationSyntaxVisitor)
@@ -295,6 +333,41 @@ final class SwiftIndexer: Indexer {
         private var danglingReferences: [Reference] = []
         private var varParameterUsrs: Set<String> = []
         private var extensionUsrMap: [String: String] = [:]
+        private var calleeUsrsByPosition: [LocalizedStringCalleePosition: Set<String>] = [:]
+
+        private static let calleeSymbolKinds: Set<SymbolKind> = [
+            .function, .instanceMethod, .classMethod, .staticMethod, .constructor, .conversionFunction,
+        ]
+
+        private func collectUsedLocalizedStringKeys(using visitor: LocalizedStringSyntaxVisitor) {
+            var keys = visitor.usedStringKeys
+
+            for callSite in visitor.callSites {
+                let position = LocalizedStringCalleePosition(line: callSite.line, column: callSite.column)
+                let calleeUsrs = calleeUsrsByPosition[position] ?? []
+                keys.formUnion(LocalizedStringCallResolver.usedKeys(for: callSite, calleeUsrs: calleeUsrs))
+            }
+
+            calleeUsrsByPosition = [:]
+
+            for unresolvedKey in visitor.unresolvedKeys {
+                logger.debug(
+                    "Unresolved localized string key at \(sourceFile.path.string):\(unresolvedKey.line):\(unresolvedKey.column), retaining catalog keys with prefix '\(unresolvedKey.prefix)' in modules \(sourceFile.modules.sorted().joined(separator: ", "))"
+                )
+            }
+
+            let formatSegments = visitor.keyFormatSegments
+            let unresolvedPrefixes = Set(visitor.unresolvedKeys.map(\.prefix))
+            let modules = sourceFile.modules
+
+            guard !keys.isEmpty || !formatSegments.isEmpty || !unresolvedPrefixes.isEmpty else { return }
+
+            graph.withLock { graph in
+                graph.addUsedLocalizedStringKeys(keys)
+                graph.addLocalizedStringKeyFormats(formatSegments)
+                graph.addUnresolvedLocalizedStringKeyPrefixes(unresolvedPrefixes, modules: modules)
+            }
+        }
 
         private func establishDeclarationHierarchy() {
             graph.withLock { graph in
@@ -331,8 +404,8 @@ final class SwiftIndexer: Indexer {
             }
         }
 
-        // Swift does not associate some type references with the containing declaration, resulting in references
-        // with no clear parent. Property references are one example: https://github.com/apple/swift/issues/56163
+        /// Swift does not associate some type references with the containing declaration, resulting in references
+        /// with no clear parent. Property references are one example: https://github.com/apple/swift/issues/56163
         private func associateDanglingReferences() {
             guard !danglingReferences.isEmpty else { return }
 

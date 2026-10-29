@@ -14,6 +14,8 @@
 		3C388876266D0CEF00E6F3AF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 3C388874266D0CEF00E6F3AF /* LaunchScreen.storyboard */; };
 		3C38889C266D0D3700E6F3AF /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C38889B266D0D3700E6F3AF /* App.swift */; };
 		3CE348432F1CF49500EC7811 /* Previews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE348422F1CF49500EC7811 /* Previews.swift */; };
+		BBBB00012EAF000000000001 /* LocalizationUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBBB00012EAF000000000002 /* LocalizationUsage.swift */; };
+		BBBB00012EAF000000000003 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BBBB00012EAF000000000004 /* Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +28,8 @@
 		3C388877266D0CEF00E6F3AF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		3C38889B266D0D3700E6F3AF /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		3CE348422F1CF49500EC7811 /* Previews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Previews.swift; sourceTree = "<group>"; };
+		BBBB00012EAF000000000002 /* LocalizationUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationUsage.swift; sourceTree = "<group>"; };
+		BBBB00012EAF000000000004 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +70,8 @@
 				3C388877266D0CEF00E6F3AF /* Info.plist */,
 				3C388871266D0CEF00E6F3AF /* Preview Content */,
 				3C38889B266D0D3700E6F3AF /* App.swift */,
+				BBBB00012EAF000000000002 /* LocalizationUsage.swift */,
+				BBBB00012EAF000000000004 /* Localizable.xcstrings */,
 			);
 			path = SwiftUIProject;
 			sourceTree = "<group>";
@@ -138,6 +144,7 @@
 				3C388876266D0CEF00E6F3AF /* LaunchScreen.storyboard in Resources */,
 				3C388873266D0CEF00E6F3AF /* Preview Assets.xcassets in Resources */,
 				3C388870266D0CEF00E6F3AF /* Assets.xcassets in Resources */,
+				BBBB00012EAF000000000003 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -152,6 +159,7 @@
 				3CE348432F1CF49500EC7811 /* Previews.swift in Sources */,
 				3C38886E266D0CEE00E6F3AF /* ContentView.swift in Sources */,
 				3C23156B2F1CF80E0043359B /* LibraryContent.swift in Sources */,
+				BBBB00012EAF000000000001 /* LocalizationUsage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

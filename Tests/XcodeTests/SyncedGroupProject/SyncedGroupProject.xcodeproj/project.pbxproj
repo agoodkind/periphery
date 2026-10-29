@@ -1,0 +1,256 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA0000000000000000000011 /* Referenced.xib in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000012 /* Referenced.xib */; };
+		AA0000000000000000000013 /* Included.xib in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000014 /* Included.xib */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA0000000000000000000001 /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000002 /* Widget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Widget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000012 /* Referenced.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Referenced.xib; path = Synced/Referenced.xib; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000014 /* Included.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Included.xib; path = Synced/Included.xib; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AA0000000000000000000021 /* Exceptions for "Synced" folder in "App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Excluded.xib,
+				Info.plist,
+				Nested/NestedExcluded.xib,
+			);
+			target = AA0000000000000000000031 /* App */;
+		};
+		AA0000000000000000000022 /* Exceptions for "Synced" folder in "Widget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Included.xib,
+				Info.plist,
+			);
+			target = AA0000000000000000000032 /* Widget */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		AA0000000000000000000041 /* Synced */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AA0000000000000000000021 /* Exceptions for "Synced" folder in "App" target */,
+				AA0000000000000000000022 /* Exceptions for "Synced" folder in "Widget" target */,
+			);
+			path = Synced;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000042 /* WidgetOnly */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WidgetOnly;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA0000000000000000000051 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA0000000000000000000061 = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000041 /* Synced */,
+				AA0000000000000000000042 /* WidgetOnly */,
+				AA0000000000000000000012 /* Referenced.xib */,
+				AA0000000000000000000062 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000062 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000001 /* App.app */,
+				AA0000000000000000000002 /* Widget.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA0000000000000000000031 /* App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000000000000000000071 /* Build configuration list for PBXNativeTarget "App" */;
+			buildPhases = (
+				AA0000000000000000000052 /* Sources */,
+				AA0000000000000000000051 /* Frameworks */,
+				AA0000000000000000000053 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000041 /* Synced */,
+			);
+			name = App;
+			packageProductDependencies = (
+			);
+			productName = App;
+			productReference = AA0000000000000000000001 /* App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AA0000000000000000000032 /* Widget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000000000000000000072 /* Build configuration list for PBXNativeTarget "Widget" */;
+			buildPhases = (
+				AA0000000000000000000054 /* Sources */,
+				AA0000000000000000000055 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000041 /* Synced */,
+				AA0000000000000000000042 /* WidgetOnly */,
+			);
+			name = Widget;
+			packageProductDependencies = (
+			);
+			productName = Widget;
+			productReference = AA0000000000000000000002 /* Widget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA0000000000000000000081 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = AA0000000000000000000073 /* Build configuration list for PBXProject "SyncedGroupProject" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA0000000000000000000061;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = AA0000000000000000000062 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA0000000000000000000031 /* App */,
+				AA0000000000000000000032 /* Widget */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA0000000000000000000053 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0000000000000000000011 /* Referenced.xib in Resources */,
+				AA0000000000000000000013 /* Included.xib in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000055 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA0000000000000000000052 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000054 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA0000000000000000000091 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000092 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INFOPLIST_FILE = Synced/Info.plist;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		AA0000000000000000000093 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INFOPLIST_FILE = Synced/Info.plist;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA0000000000000000000071 /* Build configuration list for PBXNativeTarget "App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000092 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AA0000000000000000000072 /* Build configuration list for PBXNativeTarget "Widget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000093 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AA0000000000000000000073 /* Build configuration list for PBXProject "SyncedGroupProject" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000091 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA0000000000000000000081 /* Project object */;
+}

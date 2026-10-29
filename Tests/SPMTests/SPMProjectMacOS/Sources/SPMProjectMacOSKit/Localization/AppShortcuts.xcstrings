@@ -1,0 +1,16 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "mac_shortcut_phrase": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_shortcut_phrase"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

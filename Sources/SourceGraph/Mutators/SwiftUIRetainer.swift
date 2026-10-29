@@ -7,6 +7,7 @@ final class SwiftUIRetainer: SourceGraphMutator {
     private let configuration: Configuration
     private static let specialProtocolNames = ["LibraryContentProvider"]
     private static let applicationDelegateAdaptorStructNames = ["UIApplicationDelegateAdaptor", "NSApplicationDelegateAdaptor"]
+    static let previewRegistryUsr = "s:21DeveloperToolsSupport15PreviewRegistryP"
 
     required init(graph: SourceGraph, configuration: Configuration, swiftVersion _: SwiftVersion) {
         self.graph = graph
@@ -92,8 +93,7 @@ final class SwiftUIRetainer: SourceGraphMutator {
     private func unretainPreviewMacroExpansions() {
         guard !configuration.retainSwiftUIPreviews else { return }
 
-        let previewRegistryUsr = "s:21DeveloperToolsSupport15PreviewRegistryP"
-        let macroReferences = graph.references(to: previewRegistryUsr)
+        let macroReferences = graph.references(to: Self.previewRegistryUsr)
         guard !macroReferences.isEmpty else { return }
 
         for reference in macroReferences {

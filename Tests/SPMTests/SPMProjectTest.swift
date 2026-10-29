@@ -22,4 +22,9 @@ final class SPMProjectTest: SPMSourceGraphTestCase {
     func testMacroImport() {
         assertReferenced(.module("SPMProjectKit"))
     }
+
+    func testLocalizedStrings() {
+        assertReferenced(.localizedString("spm_used_key"))
+        assertNotReferenced(.localizedString("spm_unused_key"))
+    }
 }

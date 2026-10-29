@@ -21,6 +21,17 @@ final class SwiftUIProjectTest: XcodeSourceGraphTestCase {
         assertNotReferenced(.struct("PreviewOnlyView_PreviewProvider"))
     }
 
+    func testRetainsPreviewOnlyCodeReferencedFromLivePreview() {
+        assertReferenced(.enum("LivePreviewSampleData")) {
+            self.assertReferenced(.varStatic("title"))
+        }
+    }
+
+    func testDoesNotRetainCodeReferencedOnlyFromDeadPreview() {
+        assertNotReferenced(.struct("DeadPreviewedView"))
+        assertNotReferenced(.enum("DeadPreviewSampleData"))
+    }
+
     func testRetainsLibraryContentProvider() {
         assertReferenced(.struct("LibraryOnlyView"))
         assertReferenced(.struct("LibraryOnlyView_LibraryContentProvider"))
@@ -34,5 +45,11 @@ final class SwiftUIProjectTest: XcodeSourceGraphTestCase {
 
     func testRetainsUIApplicationDelegateAdaptorReferencedType() {
         assertReferenced(.class("AppDelegate"))
+    }
+
+    func testLocalizedStrings() {
+        assertReferenced(.localizedString("swiftui_used_key"))
+        assertReferenced(.localizedString("swiftui_text_key"))
+        assertNotReferenced(.localizedString("swiftui_unused_key"))
     }
 }
