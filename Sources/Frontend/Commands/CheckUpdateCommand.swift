@@ -15,14 +15,18 @@ struct CheckUpdateCommand: ParsableCommand {
         let checker = UpdateChecker(logger: logger, configuration: configuration)
         DispatchQueue.global().async { checker.run() }
         let latestVersion = try checker.wait().get()
-        if latestVersion.isVersion(greaterThan: PeripheryVersion) {
+        if PeripheryVersion == "development" {
+            logger.info("This development build has no release version. The latest fork release is \(latestVersion).")
+        } else if latestVersion.isReleaseNewer(than: PeripheryVersion) {
             logger.info(logger.colorize("* Update Available", .boldGreen))
             let boldLatestVersion = logger.colorize(latestVersion, .bold)
             let boldLocalVersion = logger.colorize(PeripheryVersion, .bold)
-            logger.info("Version \(boldLatestVersion) is now available, you are using version \(boldLocalVersion).")
+            logger.info("Version \(boldLatestVersion) is available. The installed version is \(boldLocalVersion).")
+        } else if latestVersion.isVersion(equalTo: PeripheryVersion) {
+            logger.info("The installed version matches the latest fork release, \(latestVersion).")
         } else {
-            let boldLatestVersion = logger.colorize(latestVersion, .bold)
-            logger.info("You are using the latest version, \(boldLatestVersion).")
+            logger.info("The installed version is \(PeripheryVersion). The latest fork release is \(latestVersion).")
         }
+        logger.info("Release notes: https://github.com/agoodkind/periphery/releases/tag/\(latestVersion)")
     }
 }

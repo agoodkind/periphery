@@ -23,7 +23,7 @@ final class UpdateChecker {
         self.configuration = configuration
         let config = URLSessionConfiguration.ephemeral
         urlSession = URLSession(configuration: config)
-        latestReleaseURL = URL(string: "https://api.github.com/repos/peripheryapp/periphery/releases/latest")!
+        latestReleaseURL = URL(string: "https://api.github.com/repos/agoodkind/periphery/releases/latest")!
         semaphore = DispatchSemaphore(value: 0)
     }
 
@@ -79,13 +79,13 @@ final class UpdateChecker {
 
         debugLogger.debug("latest: \(latestVersion)")
 
-        guard latestVersion.isVersion(greaterThan: PeripheryVersion) else { return }
+        guard latestVersion.isReleaseNewer(than: PeripheryVersion) else { return }
 
         logger.info(logger.colorize("\nUpdate Available!", .boldGreen))
         let boldLatestVersion = logger.colorize(latestVersion, .bold)
         let boldLocalVersion = logger.colorize(PeripheryVersion, .bold)
         logger.info("Version \(boldLatestVersion) is now available, you are using version \(boldLocalVersion).")
-        logger.info("Release notes: " + logger.colorize("https://github.com/peripheryapp/periphery/releases/tag/\(latestVersion)", .bold))
+        logger.info("Release notes: " + logger.colorize("https://github.com/agoodkind/periphery/releases/tag/\(latestVersion)", .bold))
         let boldOption = logger.colorize("--disable-update-check", .bold)
         let boldScan = logger.colorize("scan", .bold)
         logger.info("To disable update checks pass the \(boldOption) option to the \(boldScan) command.")
