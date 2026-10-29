@@ -16,7 +16,7 @@ struct CheckUpdateCommand: ParsableCommand {
         DispatchQueue.global().async { checker.run() }
         let latestVersion = try checker.wait().get()
         if PeripheryVersion == "development" {
-            logger.info("This development build has no release version. The latest fork release is \(latestVersion).")
+            logger.info("This development build does not have a release version. The latest fork release is \(latestVersion).")
         } else if latestVersion.isReleaseNewer(than: PeripheryVersion) {
             logger.info(logger.colorize("* Update Available", .boldGreen))
             let boldLatestVersion = logger.colorize(latestVersion, .bold)
