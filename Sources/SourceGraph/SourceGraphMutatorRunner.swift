@@ -22,6 +22,7 @@ public final class SourceGraphMutatorRunner {
         // It must also come after ExtensionReferenceBuilder as some types may declare conformance
         // to Codable in an extension.
         CodingKeyEnumReferenceBuilder.self,
+        ProtobufAPIVersionCheckRetainer.self,
         ProtocolExtensionReferenceBuilder.self,
         ProtocolConformanceReferenceBuilder.self,
         ExternalTypeProtocolConformanceReferenceRemover.self,
