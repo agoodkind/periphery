@@ -1,0 +1,22 @@
+name: Release label
+
+on:
+  pull_request:
+    branches: [main, preserved-free-offline]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  release-label:
+    name: Release label
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release label
+        env:
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          PULL_REQUEST_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: swift .github/scripts/release.swift check-pr-labels

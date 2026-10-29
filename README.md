@@ -46,6 +46,7 @@
 - [Platforms](#platforms)
 - [Troubleshooting](#troubleshooting)
 - [Known Bugs](#known-bugs)
+- [Releases](#releases)
 - [Sponsors](#sponsors-) ![Sponsors](assets/sponsor.svg)
 
 ## Installation
@@ -573,6 +574,27 @@ Due to some underlying bugs in Swift, Periphery may in some instances report inc
 | [56327](https://github.com/apple/swift/issues/56327) | Index store does not relate objc optional protocol method implemented in subclass |
 | [56189](https://github.com/apple/swift/issues/56189) | Index store should relate appendInterpolation from string literals |
 | [56165](https://github.com/apple/swift/issues/56165) | Index store does not relate constructor via literal notation |
+
+## Releases
+
+Every pull request into the default branch must have exactly one label from the table below. Classify each pull request by its effect on shipped behavior and compatibility, never by diff size or line count. The "Release label" check fails when a pull request lacks a `release:*` label, has more than one, or uses an unknown `release:*` label. Its error message identifies the pull request and the label to add or remove.
+
+Release labels:
+
+| Label | Use when | Example from 3.8.0-agoodkind.7 |
+| --- | --- | --- |
+| `release:major` | The change breaks compatibility with the CLI, configuration, or output format or schema. | `4.0.0-agoodkind.1` |
+| `release:minor` | The change adds a compatible new capability. | `3.9.0-agoodkind.1` |
+| `release:patch` | The change makes a compatible fix, including a corrected finding or a false-positive fix. | `3.8.1-agoodkind.1` |
+| `release:none` | The change does not affect shipped behavior, such as changes limited to documentation, tests, CI, or release tooling. | No release |
+
+Versions use `MAJOR.MINOR.PATCH-agoodkind.N` and compare numerically: `3.10.0` is newer than `3.9.0`.
+
+The release workflow runs on every push to the default branch. It considers every pull request merged since the newest complete published release that is an ancestor of the source commit. The highest release label determines one bump for the entire release, never one bump per commit. Several `release:patch` pull requests produce one patch bump. The workflow does not publish a release when every pull request in that range uses `release:none`.
+
+Before building, the workflow reserves the new version by pushing the Git ref `refs/release-reservations/<version>` at the source commit. A reservation is not a published release. The workflow creates the release tag only when it publishes. New versions start above every existing tag and reservation, and two commits never receive the same version.
+
+A retry reuses the commit's reservation, or its tag if publication had started, even when another commit reserved or published a newer version in between. If the retry publishes a version older than the newest complete published release, it does not make that version the latest GitHub release or change the Homebrew formula. Published tags and their assets never change.
 
 ## Sponsors ![Sponsors](assets/sponsor-20.svg)
 
