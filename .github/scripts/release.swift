@@ -32,11 +32,12 @@ enum ProcessOutput {
 
 @discardableResult
 func run(_ executable: String, _ arguments: [String], at directory: URL? = nil,
-         outputMode: ProcessOutput = .inherit) throws -> String
+         outputMode: ProcessOutput = .inherit, extraEnvironment: [String: String] = [:]) throws -> String
 {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = [executable] + arguments
+    process.environment = environment.merging(extraEnvironment) { _, new in new }
     process.currentDirectoryURL = directory
     let output = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     var handle: FileHandle?
@@ -376,6 +377,23 @@ func git(_ arguments: [String]) throws -> String {
     try run("git", arguments, outputMode: .capture)
 }
 
+func gitBlob(_ revision: String, path: String, to destination: URL) throws {
+    guard files.createFile(atPath: destination.path, contents: nil) else {
+        throw ReleaseError("Cannot create \(destination.path)")
+    }
+    let handle = try FileHandle(forWritingTo: destination)
+    defer { try? handle.close() }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["git", "show", "\(revision):\(path)"]
+    process.standardOutput = handle
+    try process.run()
+    process.waitUntilExit()
+    guard process.terminationReason == .exit, process.terminationStatus == 0 else {
+        throw ReleaseError("Cannot read \(path) from \(revision)")
+    }
+}
+
 func lines(_ text: String) -> [String] {
     text.split(separator: "\n").map(String.init)
 }
@@ -401,10 +419,25 @@ func isNewestRelease(_ version: ReleaseVersion, published: [String]) throws -> B
     try versions(published).allSatisfy { $0 <= version }
 }
 
-func completeReleaseTags(_ releases: [GitHubRelease]) -> [String] {
-    releases.filter { release in
+let sourcePolicyPath = ".release-source-policy"
+
+func sourceArchiveRequired(at revision: String) throws -> Bool {
+    let paths = try lines(git(["ls-tree", "--name-only", revision, "--", sourcePolicyPath]))
+    guard !paths.isEmpty else { return false }
+
+    let policy = try git(["show", "\(revision):\(sourcePolicyPath)"])
+    guard policy == "1" else {
+        throw ReleaseError("Unsupported source archive policy \(policy) at \(revision)")
+    }
+    return true
+}
+
+func completeReleaseTags(_ releases: [GitHubRelease]) throws -> [String] {
+    try releases.filter { release in
+        guard !release.isDraft, try ReleaseVersion.parse(release.tagName) != nil else { return false }
         let names = Set(release.assets.map(\.name))
-        return !release.isDraft && ReleaseContext.assetNames(release.tagName).allSatisfy(names.contains)
+        let required = try ReleaseContext.assetNames(release.tagName, sourceArchive: sourceArchiveRequired(at: release.tagName))
+        return required.allSatisfy(names.contains)
     }.map(\.tagName)
 }
 
@@ -486,19 +519,23 @@ struct ReleaseContext {
         directory = root.appendingPathComponent("release", isDirectory: true)
     }
 
-    static func assetNames(_ version: String) -> [String] {
-        ["periphery-\(version)-macos-arm64.zip", "periphery-\(version)-macos-arm64.dmg", "install.sh", "checksums.txt"]
+    static func assetNames(_ version: String, sourceArchive: Bool) -> [String] {
+        var names = ["periphery-\(version)-macos-arm64.zip", "periphery-\(version)-macos-arm64.dmg", "install.sh"]
+        if sourceArchive { names.append("periphery-\(version)-source.tar.gz") }
+        return names + ["checksums.txt"]
     }
 
     var archiveName: String { "periphery-\(version)-macos-arm64.zip" }
     var diskImage: URL { directory.appendingPathComponent("periphery-\(version)-macos-arm64.dmg") }
     var product: URL { directory.appendingPathComponent("periphery-\(version)", isDirectory: true) }
-    var assetNames: [String] { Self.assetNames(version) }
+    func assetNames() throws -> [String] {
+        try Self.assetNames(version, sourceArchive: sourceArchiveRequired(at: "HEAD"))
+    }
 
     func checkRelease() async throws {
         if let release = try await github.release(version), !release.isDraft {
             let names = Set(release.assets.map(\.name))
-            for name in assetNames where !names.contains(name) {
+            for name in try assetNames() where !names.contains(name) {
                 throw ReleaseError("Published release \(version) lacks \(name). Dispatch with an empty tag to create a complete release.")
             }
             try append("exists=true\n", to: URL(fileURLWithPath: required("GITHUB_OUTPUT")))
@@ -509,9 +546,42 @@ struct ReleaseContext {
     }
 
     func build() throws {
-        try run(required("SWIFT_COMMAND"), ["build", "-c", "release", "--arch", "arm64", "--product", "periphery", "--scratch-path", ".build/arm64"])
+        let sourceRequired = try sourceArchiveRequired(at: "HEAD")
+        var temporary: URL?
+        var source = root
+        if sourceRequired {
+            let extraction = files.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try files.createDirectory(at: extraction, withIntermediateDirectories: true)
+            temporary = extraction
+            source = extraction.appendingPathComponent("periphery-\(version)", isDirectory: true)
+        }
+        var failure: Error?
+        do {
+            if let temporary {
+                try run("tar", ["-xzf", directory.appendingPathComponent("periphery-\(version)-source.tar.gz").path, "-C", temporary.path])
+            }
+            try build(at: source)
+            if sourceRequired { try verifyBazel(at: source) }
+        } catch {
+            failure = error
+        }
+        if let temporary {
+            do {
+                try files.removeItem(at: temporary)
+            } catch {
+                if let failure {
+                    throw ReleaseError("\(failure); cannot remove source extraction \(temporary.path): \(error)")
+                }
+                throw ReleaseError("Cannot remove source extraction \(temporary.path): \(error)")
+            }
+        }
+        if let failure { throw failure }
+    }
+
+    func build(at source: URL) throws {
+        try run(required("SWIFT_COMMAND"), ["build", "-c", "release", "--arch", "arm64", "--product", "periphery", "--scratch-path", ".build/arm64"], at: source)
         try files.createDirectory(at: product, withIntermediateDirectories: true)
-        try files.copyItem(at: root.appendingPathComponent(".build/arm64/release/periphery"), to: product.appendingPathComponent("periphery"))
+        try files.copyItem(at: source.appendingPathComponent(".build/arm64/release/periphery"), to: product.appendingPathComponent("periphery"))
         let swiftPath = try run("xcrun", ["--find", "swift"], outputMode: .capture)
         let library = URL(fileURLWithPath: swiftPath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("lib/libIndexStore.dylib")
         try files.copyItem(at: library, to: product.appendingPathComponent("libIndexStore.dylib"))
@@ -569,9 +639,74 @@ struct ReleaseContext {
         try run("spctl", ["--assess", "--type", "open", "--context", "context:primary-signature", "-v", diskImage.path])
     }
 
+    func sourceArchive() throws {
+        guard try sourceArchiveRequired(at: "HEAD") else { return }
+        let source = try required("SOURCE_SHA")
+        guard try git(["rev-parse", "HEAD"]) == source else {
+            throw ReleaseError("SOURCE_SHA must equal the checked-out commit")
+        }
+        try files.createDirectory(at: directory, withIntermediateDirectories: true)
+        let temporary = files.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try files.createDirectory(at: temporary, withIntermediateDirectories: true)
+        defer { try? files.removeItem(at: temporary) }
+        let index = temporary.appendingPathComponent("index").path
+        let indexEnvironment = ["GIT_INDEX_FILE": index]
+        try run("git", ["read-tree", source], extraEnvironment: indexEnvironment)
+        let installerEntry = try git(["ls-tree", source, "--", "scripts/install.sh"])
+        guard let installerMode = installerEntry.split(separator: " ").first,
+              installerMode == "100644" || installerMode == "100755" else {
+            throw ReleaseError("Cannot read the installer file mode from \(source)")
+        }
+        for (path, mode, pattern, replacement) in [
+            ("Sources/Frontend/Version.swift", "100644", #"^let PeripheryVersion = ".*"$"#, "let PeripheryVersion = \"\(version)\""),
+            ("scripts/install.sh", String(installerMode), "^VERSION=.*$", "VERSION=\(version)"),
+            ("MODULE.bazel", "100644", #"^    version = ".*",$"#, "    version = \"\(version)\","),
+        ] {
+            let input = temporary.appendingPathComponent(UUID().uuidString)
+            try gitBlob(source, path: path, to: input)
+            try replace(pattern, with: replacement, in: input)
+            let hash = try run("git", ["hash-object", "-w", input.path], outputMode: .capture)
+            try run("git", ["update-index", "--add", "--cacheinfo", "\(mode),\(hash),\(path)"], extraEnvironment: indexEnvironment)
+        }
+        let tree = try run("git", ["write-tree"], outputMode: .capture, extraEnvironment: indexEnvironment)
+        let timestamp = try git(["show", "-s", "--format=%cI", source])
+        let archive = directory.appendingPathComponent("periphery-\(version)-source.tar.gz")
+        try run("git", ["archive", "--format=tar.gz", "--mtime=\(timestamp)", "--prefix=periphery-\(version)/",
+                        "--output=\(archive.path)", tree])
+    }
+
+    func verifyBazel(at source: URL) throws {
+        let output = source.deletingLastPathComponent().appendingPathComponent("bazel-output")
+        let option = "--output_user_root=\(output.path)"
+        var problems: [String] = []
+        do {
+            try run("bazel", [option, "build", "//:periphery"], at: source)
+            let binary = source.appendingPathComponent("bazel-bin/Sources/Frontend_opt").path
+            guard try run(binary, ["version"], at: source, outputMode: .capture) == version else {
+                throw ReleaseError("Bazel source archive executable version must equal \(version)")
+            }
+        } catch {
+            problems.append("\(error)")
+        }
+        do {
+            try run("bazel", [option, "shutdown"], at: source)
+        } catch {
+            problems.append("Cannot stop the source archive Bazel server: \(error)")
+        }
+        do {
+            if files.fileExists(atPath: output.path) {
+                try run("chmod", ["-R", "u+w", output.path])
+                try files.removeItem(at: output)
+            }
+        } catch {
+            problems.append("Cannot remove Bazel output \(output.path): \(error)")
+        }
+        guard problems.isEmpty else { throw ReleaseError(problems.joined(separator: "\n")) }
+    }
+
     func checksums() throws {
         try files.copyItem(at: root.appendingPathComponent("scripts/install.sh"), to: directory.appendingPathComponent("install.sh"))
-        let lines = try assetNames.dropLast().map { name in
+        let lines = try assetNames().dropLast().map { name in
             try "\(checksum(directory.appendingPathComponent(name)))  \(name)\n"
         }.joined()
         try lines.write(to: directory.appendingPathComponent("checksums.txt"), atomically: true, encoding: .utf8)
@@ -579,6 +714,15 @@ struct ReleaseContext {
 
     func publish() async throws {
         let source = try required("SOURCE_SHA")
+        guard try git(["rev-parse", "HEAD"]) == source else {
+            throw ReleaseError("SOURCE_SHA must equal the checked-out commit")
+        }
+        let names = try assetNames()
+        for name in names {
+            guard files.fileExists(atPath: directory.appendingPathComponent(name).path) else {
+                throw ReleaseError("Release asset \(name) does not exist")
+            }
+        }
         let tags = try run("git", ["tag", "--list", version], outputMode: .capture)
         if tags.isEmpty {
             try run("git", ["tag", version, source])
@@ -605,7 +749,7 @@ struct ReleaseContext {
             let data = try await github.send("repos/\(github.repository)/releases", method: "POST", value: Create(tag_name: version, name: "Periphery \(version)", body: notes.body))
             release = try JSONDecoder().decode(GitHubRelease.self, from: data)
         }
-        for name in assetNames {
+        for name in names {
             if let asset = release.assets.first(where: { $0.name == name }) {
                 _ = try await github.request("repos/\(github.repository)/releases/assets/\(asset.id)", method: "DELETE")
             }
@@ -622,6 +766,10 @@ struct ReleaseContext {
             throw ReleaseError("Published release \(version) does not exist")
         }
 
+        let names = Set(release.assets.map(\.name))
+        for name in try Self.assetNames(version, sourceArchive: sourceArchiveRequired(at: version)) where !names.contains(name) {
+            throw ReleaseError("Release \(version) lacks \(name)")
+        }
         try files.createDirectory(at: directory, withIntermediateDirectories: true)
         for name in [archiveName, "checksums.txt"] {
             guard let asset = release.assets.first(where: { $0.name == name }) else {
@@ -732,9 +880,9 @@ func collectReleaseInput() async throws {
     let head = try git(["rev-parse", "HEAD"])
     let destination = try URL(fileURLWithPath: required("RELEASE_INPUT_PATH"))
     let github = try GitHub(repository: required("GITHUB_REPOSITORY"), token: environment["GH_TOKEN"])
+    try fetchReleaseRefs()
     let published = try await completeReleaseTags(github.releases())
     var commits: [CommitLabels] = []
-    try fetchReleaseRefs()
     let plan = try releasePlan(head: head, requested: required("REQUESTED_TAG", allowEmpty: true), published: Set(published))
     if case let .unreleased(_, shas) = plan {
         for sha in shas {
@@ -798,6 +946,7 @@ do {
         case "build": try context.build()
         case "package": try context.package()
         case "notarize": try context.notarize()
+        case "source-archive": try context.sourceArchive()
         case "checksums": try context.checksums()
         case "publish": try await context.publish()
         case "download": try await context.download()
