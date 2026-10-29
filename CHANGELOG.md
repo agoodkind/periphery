@@ -24,6 +24,7 @@ This section includes fixes from [tiny-earth-moon/periphery](https://github.com/
 - Retain code referenced only from previews of used SwiftUI views.
 - Report public members of non-public extensions as redundant public.
 - Report SwiftUI `@State` properties as unused when code assigns them through `_name` and never reads them.
+- Retain all String Catalog keys in modules with mixed literal and runtime key expressions, and retain both literal keys in ternary expressions.
 
 ## 3.8.0 (2026-07-25)
 

@@ -21,6 +21,11 @@ public enum PlainKeyCalls {
 
         run("plain_generic_not_key", completion: { _, _ in }, title: "plain_function_type_title_key")
         privateTitle(title: "plain_private_function_key")
+        _ = ternaryTitle(flag: Bool.random())
+    }
+
+    static func ternaryTitle(flag: Bool) -> String {
+        NSLocalizedString(flag ? "plain_ternary_first_key" : "plain_ternary_second_key", bundle: .module, comment: "")
     }
 
     static func run(_ value: some StringProtocol, completion: (Int, String) -> Void, title: LocalizedStringResource) {
