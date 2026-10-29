@@ -1,0 +1,135 @@
+#!/usr/bin/env swift
+
+import Foundation
+
+struct Finding: Decodable {
+    let name: String
+}
+
+enum VerificationError: Error, CustomStringConvertible {
+    case failed(String)
+
+    var description: String {
+        switch self {
+        case let .failed(message): message
+        }
+    }
+}
+
+func report(_ message: String) {
+    FileHandle.standardOutput.write(Data("\(message)\n".utf8))
+}
+
+func run(_ arguments: [String], in directory: URL, log: URL) throws -> Int32 {
+    let output = try FileHandle(forWritingTo: log)
+    defer { output.closeFile() }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["bazel"] + arguments
+    process.currentDirectoryURL = directory
+    process.standardOutput = output
+    process.standardError = output
+    try process.run()
+    process.waitUntilExit()
+    return process.terminationStatus
+}
+
+func scan(in directory: URL, results: URL, log: URL) throws -> Int32 {
+    try run(
+        [
+            "run", "@periphery", "--", "scan", "--bazel", "--strict",
+            "--format", "json", "--disable-update-check", "--write-results", results.path,
+        ],
+        in: directory,
+        log: log
+    )
+}
+
+func names(in results: URL) throws -> [String] {
+    try JSONDecoder().decode([Finding].self, from: Data(contentsOf: results)).map(\.name).sorted()
+}
+
+func verify() throws {
+    let manager = FileManager.default
+    let testDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    let repository = testDirectory.deletingLastPathComponent().deletingLastPathComponent()
+    let temporary = manager.temporaryDirectory.appendingPathComponent("periphery-bazel-\(UUID().uuidString)")
+    let fixture = temporary.appendingPathComponent("Fixture")
+    try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
+    try manager.createDirectory(at: fixture, withIntermediateDirectories: true)
+    let fixtureSource = testDirectory.appendingPathComponent("Fixture")
+    for path in ["MODULE.bazel", "BUILD.bazel", "Sources"] {
+        try manager.copyItem(
+            at: fixtureSource.appendingPathComponent(path),
+            to: fixture.appendingPathComponent(path)
+        )
+    }
+    try manager.copyItem(
+        at: repository.appendingPathComponent(".bazelversion"),
+        to: fixture.appendingPathComponent(".bazelversion")
+    )
+
+    let module = fixture.appendingPathComponent("MODULE.bazel")
+    let source = try String(contentsOf: module, encoding: .utf8)
+    guard source.contains("path = \"../../..\"") else {
+        throw VerificationError.failed("The fixture must select the local Periphery checkout.")
+    }
+
+    let repositoryPath = repository.path.replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+    try source.replacingOccurrences(of: "path = \"../../..\"", with: "path = \"\(repositoryPath)\"")
+        .write(to: module, atomically: true, encoding: .utf8)
+
+    let unusedLog = temporary.appendingPathComponent("unused.log")
+    let cleanLog = temporary.appendingPathComponent("clean.log")
+    let cleanupLog = temporary.appendingPathComponent("cleanup.log")
+    for log in [unusedLog, cleanLog, cleanupLog] {
+        guard manager.createFile(atPath: log.path, contents: nil) else {
+            throw VerificationError.failed("Could not create \(log.path)")
+        }
+    }
+
+    do {
+        let unusedResults = temporary.appendingPathComponent("unused.json")
+        report("Scanning the fixture with its unused declaration.")
+        let unusedStatus = try scan(in: fixture, results: unusedResults, log: unusedLog)
+        let unusedNames = try names(in: unusedResults)
+        guard unusedStatus == 1, unusedNames == ["unusedGreeting()"] else {
+            throw VerificationError.failed("Expected exit 1 and only unusedGreeting(); received exit \(unusedStatus), \(unusedNames). Log: \(unusedLog.path)")
+        }
+
+        report("The strict scan returned 1 and reported only unusedGreeting().")
+
+        try manager.removeItem(at: fixture.appendingPathComponent("Sources/Unused.swift"))
+        let cleanResults = temporary.appendingPathComponent("clean.json")
+        report("Scanning the fixture after removing its unused declaration.")
+        let cleanStatus = try scan(in: fixture, results: cleanResults, log: cleanLog)
+        let cleanNames = try names(in: cleanResults)
+        guard cleanStatus == 0, cleanNames.isEmpty else {
+            throw VerificationError.failed("Expected exit 0 without findings; received exit \(cleanStatus), \(cleanNames). Log: \(cleanLog.path)")
+        }
+
+        report("The clean scan returned 0 without findings.")
+    } catch {
+        let cleanupStatus = try run(["clean", "--expunge"], in: fixture, log: cleanupLog)
+        if cleanupStatus != 0 {
+            report("Bazel cleanup failed with exit \(cleanupStatus). Log: \(cleanupLog.path)")
+        }
+        throw VerificationError.failed("\(error)\nVerification evidence remains at \(temporary.path)")
+    }
+
+    let cleanupStatus = try run(["clean", "--expunge"], in: fixture, log: cleanupLog)
+    guard cleanupStatus == 0 else {
+        throw VerificationError.failed("Bazel cleanup failed with exit \(cleanupStatus). Log: \(cleanupLog.path)")
+    }
+
+    try manager.removeItem(at: temporary)
+    report("Bazel consumer verification passed, and the temporary workspace was removed.")
+}
+
+do {
+    try verify()
+} catch {
+    FileHandle.standardError.write(Data("\(error)\n".utf8))
+    exit(1)
+}
