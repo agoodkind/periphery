@@ -1,16 +1,29 @@
 ## master
 
+This section includes fixes from [tiny-earth-moon/periphery](https://github.com/tiny-earth-moon/periphery) 3.10.0, with attribution in the [README credits](README.md#credits).
+
 ##### Breaking
 
 - None.
 
 ##### Enhancements
 
-- None.
+- Report unused String Catalog (`.xcstrings`) keys with `--disable-unused-localized-string-analysis` and `--localized-string-catalog-exclude`; the default exclusions are `**/InfoPlist.xcstrings` and `**/AppShortcuts.xcstrings`.
+- Retain declarations marked `@available(<platform>, unavailable)` and declarations referenced only inside platform-conditional `#if` branches; disable with `--disable-platform-conditional-retention`.
+- Support Xcode 16+ synchronized folders with per-target membership exceptions.
+- Locate the SwiftPM index store with `swift build --show-bin-path` for both the `swiftbuild` and `native` build systems.
 
 ##### Bug Fixes
 
-- None.
+- Use a deterministic DerivedData path regardless of scheme order.
+- Run `xcodebuild -list` in Periphery's DerivedData location and honor `--clean-build`.
+- Fix infinite recursion during glob expansion of directories named `**`.
+- Retain public macros and associated types of public protocols with `--retain-public`.
+- Retain private Interface Builder members connected in undeclared `.xib` and `.storyboard` files and index Core Data models during SwiftPM scans.
+- Retain `buildBlock` of any arity and both `buildPartialBlock` methods, and stop reporting public result builders used from another module as redundant public.
+- Retain code referenced only from previews of used SwiftUI views.
+- Report public members of non-public extensions as redundant public.
+- Report SwiftUI `@State` properties as unused when code assigns them through `_name` and never reads them.
 
 ## 3.8.0 (2026-07-25)
 
