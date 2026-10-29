@@ -400,6 +400,35 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
+    func testRetainsOnlyDeclarationReferencedInPlatformConditionalBlock() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct232")) {
+                self.assertReferenced(.functionMethodInstance("render()"))
+            }
+            assertReferenced(.struct("FixtureStruct233")) {
+                self.assertNotReferenced(.functionMethodInstance("render()"))
+            }
+            assertReferenced(.class("FixtureClass232")) {
+                self.assertReferenced(.functionMethodInstance("onlyUsedOnIOS()"))
+                self.assertNotReferenced(.functionMethodInstance("unusedMethod()"))
+            }
+        }
+    }
+
+    func testRetainsSameNamedMembersCalledThroughUnknownReceiver() {
+        analyze(retainPublic: true) {
+            assertReferenced(.struct("FixtureStruct234")) {
+                self.assertReferenced(.functionMethodInstance("method()"))
+            }
+            assertReferenced(.struct("FixtureStruct235")) {
+                self.assertReferenced(.functionMethodInstance("method()"))
+            }
+            assertReferenced(.class("FixtureClass234")) {
+                self.assertNotReferenced(.functionMethodInstance("uniqueUnusedFunction()"))
+            }
+        }
+    }
+
     func testRetainsPropertyWrapperReferencedInNegatedPlatformConditionalBlock() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct227")) {

@@ -56,6 +56,7 @@ swift_library(
         "SourceGraph/Elements/DeclarationAttribute.swift",
         "SourceGraph/Elements/ImportStatement.swift",
         "SourceGraph/Elements/Location.swift",
+        "SourceGraph/Elements/PlatformConditionalNameUse.swift",
         "SourceGraph/Elements/ProjectFileKind.swift",
         "SourceGraph/Elements/Reference.swift",
         "SourceGraph/Elements/SourceFile.swift",
