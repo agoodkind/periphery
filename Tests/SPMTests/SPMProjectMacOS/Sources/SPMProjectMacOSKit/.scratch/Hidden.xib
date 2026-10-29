@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" targetRuntime="MacOSX.Cocoa">
+    <objects>
+        <customObject id="-2" userLabel="File's Owner" customClass="SPMImplicitXibViewController" customModule="SPMProjectMacOSKit" customModuleProvider="target"/>
+        <button id="hidden-button">
+            <connections>
+                <action selector="hiddenOnlyAction:" target="-2" id="hidden-action"/>
+            </connections>
+        </button>
+    </objects>
+</document>

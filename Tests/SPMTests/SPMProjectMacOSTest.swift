@@ -48,6 +48,7 @@
                 // Unreferenced - not connected in XIB
                 self.assertNotReferenced(.varInstance("unusedPrivateOutlet"))
                 self.assertNotReferenced(.functionMethodInstance("unusedPrivateAction(_:)"))
+                self.assertNotReferenced(.functionMethodInstance("hiddenOnlyAction(_:)"))
                 self.assertNotReferenced(.varInstance("unusedPrivateInspectable"))
                 // Declared in a private extension (folded into the class)
                 self.assertReferenced(.functionMethodInstance("extensionButtonTapped(_:)"))
