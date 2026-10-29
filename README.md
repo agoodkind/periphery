@@ -64,10 +64,19 @@ mint install agoodkind/periphery
 
 ### [Bazel](https://bazel.build/)
 
+Select a published fork release in the consuming project's `MODULE.bazel`:
+
 ```python
-bazel_dep(name = "periphery", version = "<version>", dev_dependency = True)
+bazel_dep(name = "periphery", version = "3.8.0", dev_dependency = True)
+git_override(
+    module_name = "periphery",
+    remote = "https://github.com/agoodkind/periphery.git",
+    tag = "3.8.0-agoodkind.7",
+)
 use_repo(use_extension("@periphery//bazel:generated.bzl", "generated"), "periphery_generated")
 ```
+
+The override selects this fork directly. Change the tag to select another published release.
 
 See [Bazel](#build-systems) below for usage instructions.
 
@@ -466,6 +475,8 @@ By default, Periphery looks for the index store at `.build/debug/index/store`. T
 bazel run @periphery -- scan --bazel
 ```
 
+Add `--strict` to return exit status `1` when the scan finds unused declarations. A scan without findings returns `0`.
+
 The `--bazel` option enables Bazel mode, which provides seamless integration with your project. It works by querying your project to identify all top-level targets, generating a hidden implementation of the [scan](https://github.com/peripheryapp/periphery/blob/master/bazel/rules.bzl) rule, and then invoking `bazel run`. You can filter the default top-level target query with the `--bazel-filter <value>` option, where `<value>` will be passed as the first argument to Bazel's [filter](https://bazel.build/query/language#filter) operator. You can also override the generated query entirely with `--bazel-query <value>`, which is useful when you need to exclude targets such as ones tagged `manual`, or avoid building targets that use an incorrect transition when built directly. The generated query can be seen in the console with the `--verbose` option.
 
 Periphery's generated scan rule follows embedded bundle and plugin edges transitively, so you can root the scan in application targets while still analyzing code that is only reachable through extensions, app clips, watch applications, or Swift compiler plugins.
@@ -474,6 +485,16 @@ Periphery's generated scan rule follows embedded bundle and plugin edges transit
 > By default, Periphery passes `--check_visibility=false` to `bazel run` to simplify integration, since the generated scan target references your project's targets which may not otherwise be visible. However, disabling visibility checking can invalidate Bazel's analysis cache, resulting in slower subsequent builds.
 >
 > You can disable this behavior with the `--bazel-check-visibility` option. You must ensure the necessary targets are visible to Periphery's generated package, for example by adding the `@@+generated+periphery//bazel:generated` visibility label to your targets.
+
+#### Verify a fork checkout
+
+Install the Bazel version in [.bazelversion](.bazelversion) and make `bazel` available on `PATH`. Run the real consumer regression from the fork root:
+
+```sh
+swift Tests/BazelTests/Verify.swift
+```
+
+The regression copies the [Swift example](Tests/BazelTests/Fixture) into a temporary workspace and selects the local fork. It checks that the strict scan reports only `unusedGreeting()` and returns `1`. It then removes that function and checks that the scan returns `0` without findings. The regression removes its temporary workspace after success and preserves diagnostic logs after a failure.
 
 ### Other
 
