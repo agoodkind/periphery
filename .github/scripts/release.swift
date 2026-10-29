@@ -190,13 +190,6 @@ struct GitHub {
         try await releases().first { $0.tagName == version }
     }
 
-    func completeReleases() async throws -> [String] {
-        try await releases().filter { release in
-            let names = Set(release.assets.map(\.name))
-            return !release.isDraft && ReleaseContext.assetNames(release.tagName).allSatisfy(names.contains)
-        }.map(\.tagName)
-    }
-
     func send(_ path: String, method: String, value: some Encodable) async throws -> Data {
         try await request(path, method: method, body: JSONEncoder().encode(value))
     }
@@ -211,8 +204,40 @@ enum ReleaseLabel: String, CaseIterable, Comparable {
     static let prefix = "release:"
     static let choices = allCases.reversed().map(\.rawValue).joined(separator: ", ")
 
+    var rank: Int {
+        switch self {
+        case .noRelease: 0
+        case .patch: 1
+        case .minor: 2
+        case .major: 3
+        }
+    }
+
+    var bump: VersionBump? {
+        switch self {
+        case .noRelease: nil
+        case .patch: .patch
+        case .minor: .minor
+        case .major: .major
+        }
+    }
+
     static func < (lhs: ReleaseLabel, rhs: ReleaseLabel) -> Bool {
-        allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!
+        lhs.rank < rhs.rank
+    }
+}
+
+enum VersionBump {
+    case patch
+    case minor
+    case major
+
+    var label: ReleaseLabel {
+        switch self {
+        case .patch: .patch
+        case .minor: .minor
+        case .major: .major
+        }
     }
 }
 
@@ -253,19 +278,18 @@ struct ReleaseVersion: Comparable, CustomStringConvertible {
         return first != "0" || field.count == 1
     }
 
-    func next(_ label: ReleaseLabel) throws -> ReleaseVersion {
+    func next(_ bump: VersionBump) throws -> ReleaseVersion {
         func increment(_ value: Int, _ component: String) throws -> Int {
             guard value < Int.max else {
-                throw ReleaseError("Version \(self) has no room for a \(label.rawValue) release because its \(component) number is \(Int.max). Keep every published tag unchanged and ask a maintainer to choose the next release version.")
+                throw ReleaseError("Version \(self) has no room for a \(bump.label.rawValue) release because its \(component) number is \(Int.max). Keep every published tag unchanged and ask a maintainer to choose the next release version.")
             }
 
             return value + 1
         }
-        switch label {
+        switch bump {
         case .major: return try ReleaseVersion(major: increment(major, "major"), minor: 0, patch: 0, build: 1)
         case .minor: return try ReleaseVersion(major: major, minor: increment(minor, "minor"), patch: 0, build: 1)
         case .patch: return try ReleaseVersion(major: major, minor: minor, patch: increment(patch, "patch"), build: 1)
-        case .noRelease: return self
         }
     }
 }
@@ -367,8 +391,14 @@ func isNewestRelease(_ version: ReleaseVersion, published: [String]) throws -> B
     try versions(published).allSatisfy { $0 <= version }
 }
 
+func completeReleaseTags(_ releases: [GitHubRelease]) -> [String] {
+    releases.filter { release in
+        let names = Set(release.assets.map(\.name))
+        return !release.isDraft && ReleaseContext.assetNames(release.tagName).allSatisfy(names.contains)
+    }.map(\.tagName)
+}
+
 func releasePlan(head: String, requested: String, published: Set<String>) throws -> ReleasePlan {
-    try fetchReleaseRefs()
     if !requested.isEmpty {
         guard let version = try ReleaseVersion.parse(requested), try !lines(git(["tag", "--list", requested])).isEmpty else {
             throw ReleaseError("REQUESTED_TAG must select an existing \(ReleaseVersion.format) tag")
@@ -657,20 +687,21 @@ func prepare() throws {
     let version: ReleaseVersion
     let source: VersionSource
     let input = try ReleaseInput.load()
+    try fetchReleaseRefs()
     switch try releasePlan(head: head, requested: requested, published: Set(input.publishedReleases)) {
     case let .existing(existing, existingSource):
         version = existing
         source = existingSource
     case let .unreleased(predecessor, commits):
         let label = try highestLabel(commits: commits, head: head, in: input)
-        guard label != .noRelease else {
+        guard let bump = label.bump else {
             print("Every pull request after published release \(predecessor) uses \(ReleaseLabel.noRelease.rawValue). This run does not publish a release.")
             try append("release=false\nsource_sha=\(head)\n", to: output)
             return
         }
 
         let newest = try (releaseTags() + reservations() + [predecessor]).max() ?? predecessor
-        version = try newest.next(label)
+        version = try newest.next(bump)
         let reservation = "\(reservationNamespace)\(version)"
         do {
             try run("git", ["push", "--quiet", "--force-with-lease=\(reservation):", "origin", "\(head):\(reservation)"])
@@ -691,8 +722,9 @@ func collectReleaseInput() async throws {
     let head = try git(["rev-parse", "HEAD"])
     let destination = try URL(fileURLWithPath: required("RELEASE_INPUT_PATH"))
     let github = try GitHub(repository: required("GITHUB_REPOSITORY"), token: environment["GH_TOKEN"])
-    let published = try await github.completeReleases()
+    let published = try await completeReleaseTags(github.releases())
     var commits: [CommitLabels] = []
+    try fetchReleaseRefs()
     let plan = try releasePlan(head: head, requested: required("REQUESTED_TAG", allowEmpty: true), published: Set(published))
     if case let .unreleased(_, shas) = plan {
         for sha in shas {

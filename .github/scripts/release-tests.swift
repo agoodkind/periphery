@@ -205,8 +205,11 @@ final class Fixture {
     func outputs(_ url: URL) throws -> [String: String] {
         var values: [String: String] = [:]
         for line in try String(contentsOf: url, encoding: .utf8).split(separator: "\n") {
-            let pair = line.split(separator: "=", maxSplits: 1).map(String.init)
-            values[pair[0]] = pair.count == 2 ? pair[1] : ""
+            guard let separator = line.firstIndex(of: "="), separator != line.startIndex else {
+                throw RegressionError("\(url.path) has a line without a key=value pair: \(line)")
+            }
+
+            values[String(line[..<separator])] = String(line[line.index(after: separator)...])
         }
         return values
     }
