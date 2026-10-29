@@ -2,7 +2,7 @@ name: Build release artifacts
 
 on:
   push:
-    branches: [preserved-free-offline]
+    branches: [main, preserved-free-offline]
   workflow_dispatch:
     inputs:
       tag:

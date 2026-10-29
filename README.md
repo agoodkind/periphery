@@ -577,7 +577,7 @@ Due to some underlying bugs in Swift, Periphery may in some instances report inc
 
 ## Releases
 
-Every pull request into `preserved-free-offline` must have exactly one label from the table below. Classify each pull request by its effect on shipped behavior and compatibility, never by diff size or line count. The "Release label" check fails when a pull request lacks a `release:*` label, has more than one, or uses an unknown `release:*` label. Its error message identifies the pull request and the label to add or remove.
+Every pull request into the default branch must have exactly one label from the table below. Classify each pull request by its effect on shipped behavior and compatibility, never by diff size or line count. The "Release label" check fails when a pull request lacks a `release:*` label, has more than one, or uses an unknown `release:*` label. Its error message identifies the pull request and the label to add or remove.
 
 Release labels:
 
@@ -590,7 +590,7 @@ Release labels:
 
 Versions use `MAJOR.MINOR.PATCH-agoodkind.N` and compare numerically: `3.10.0` is newer than `3.9.0`.
 
-The release workflow runs on every push to `preserved-free-offline`. It considers every pull request merged since the newest complete published release that is an ancestor of the source commit. The highest release label determines one bump for the entire release, never one bump per commit. Several `release:patch` pull requests produce one patch bump. The workflow does not publish a release when every pull request in that range uses `release:none`.
+The release workflow runs on every push to the default branch. It considers every pull request merged since the newest complete published release that is an ancestor of the source commit. The highest release label determines one bump for the entire release, never one bump per commit. Several `release:patch` pull requests produce one patch bump. The workflow does not publish a release when every pull request in that range uses `release:none`.
 
 Before building, the workflow reserves the new version by pushing the Git ref `refs/release-reservations/<version>` at the source commit. A reservation is not a published release. The workflow creates the release tag only when it publishes. New versions start above every existing tag and reservation, and two commits never receive the same version.
 

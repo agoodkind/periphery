@@ -2,7 +2,7 @@ name: Release label
 
 on:
   pull_request:
-    branches: [preserved-free-offline]
+    branches: [main, preserved-free-offline]
     types: [opened, reopened, synchronize, labeled, unlabeled]
 
 permissions:
