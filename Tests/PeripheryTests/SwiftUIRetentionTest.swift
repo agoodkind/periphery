@@ -41,12 +41,32 @@
         /// assigns `_assignedViaBacking` and the fixture never reads the property.
         /// `SwiftUIRetainer` adds a reference to the `@State` property only for explicit reads of `$name` or `_name`.
         /// The assignment `_assignedViaBacking = State(wrappedValue: flag)` counts as a write.
-        func testReportsMacroStatePropertyInitializedOnlyViaBackingStorage() {
+        func testReportsMacroStatePropertyInitializedOnlyViaBackingStorage() throws {
+            try skipUnlessStateIsMacro()
+
             analyze(retainPublic: true) {
                 assertReferenced(.struct("FixtureStruct231")) {
                     self.assertNotReferenced(.varInstance("assignedViaBacking"))
                 }
             }
+        }
+
+        // MARK: - Private
+
+        /// This helper runs `xcodebuild -version` and reads the major Xcode version.
+        /// It skips the test when that version is below 27.
+        /// The Xcode 27 SDK declares SwiftUI `State` as an attached macro.
+        /// Earlier SDKs declare `State` as a property wrapper.
+        /// With those SDKs, the index store records an assignment to `_name` as a reference to `name`.
+        private func skipUnlessStateIsMacro() throws {
+            let versionOutput = try Self.shell.exec(["xcodebuild", "-version"])
+            let majorVersion = versionOutput
+                .split(whereSeparator: \.isWhitespace)
+                .dropFirst()
+                .first
+                .flatMap { Int($0.split(separator: ".").first ?? "") } ?? 0
+
+            try XCTSkipUnless(majorVersion >= 27, "This test requires the Xcode 27 SDK, which declares SwiftUI State as a macro.")
         }
     }
 #endif
