@@ -64,6 +64,10 @@ func verify() throws {
             to: fixture.appendingPathComponent(path)
         )
     }
+    try manager.copyItem(
+        at: repository.appendingPathComponent(".bazelversion"),
+        to: fixture.appendingPathComponent(".bazelversion")
+    )
 
     let module = fixture.appendingPathComponent("MODULE.bazel")
     let source = try String(contentsOf: module, encoding: .utf8)
