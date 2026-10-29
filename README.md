@@ -32,12 +32,14 @@
     - [Assign-only Properties](#assign-only-properties)
     - [Redundant Public Accessibility](#redundant-public-accessibility)
     - [Unused Imports](#unused-imports)
+    - [Platform Conditionals](#platform-conditionals)
     - [Objective-C](#objective-c)
     - [Codable](#codable)
     - [Equatable and Hashable](#equatable-and-hashable)
     - [XCTestCase](#xctestcase)
     - [Interface Builder](#interface-builder)
     - [SPI (System Programming Interface)](#spi-system-programming-interface)
+    - [Localized Strings](#localized-strings)
 - [Comment Commands](#comment-commands)
 - [Xcode Integration](#xcode-integration)
 - [Excluding Files](#excluding-files)
@@ -46,6 +48,8 @@
 - [Platforms](#platforms)
 - [Troubleshooting](#troubleshooting)
 - [Known Bugs](#known-bugs)
+- [Credits](#credits)
+- [Releases](#releases)
 - [Sponsors](#sponsors-) ![Sponsors](assets/sponsor.svg)
 
 ## Installation
@@ -302,6 +306,15 @@ Periphery can only detect unused imports of targets it has scanned. It cannot de
 
 Periphery will likely produce false positives for targets with mixed Swift and Objective-C, as Periphery cannot scan the Objective-C files. It is recommended, therefore, to disable unused import detection for projects with a significant amount of Objective-C or manually exclude the mixed language targets from the results.
 
+### Platform Conditionals
+
+The index store only describes the platform Periphery built for, so code that is only used on another platform would be reported as unused. To avoid these false positives, Periphery retains:
+
+- Declarations marked `@available(<platform>, unavailable)` (e.g. `@available(tvOS, unavailable)`), along with their members. `@available(*, unavailable)`, `swift` and `*ApplicationExtension` platforms are not affected.
+- Periphery reads every branch of an `#if` block conditioned on `os()`, `targetEnvironment()`, `arch()`, or `canImport()`, including `#else` branches, and matches declarations against the names of functions the code calls, properties it accesses, and types it references in those branches. Periphery does not count a declaration's name as a reference and still reports unused declarations inside the block. When only one declaration in the scanned code has a matching name, Periphery retains it. When several declarations share that name, Periphery retains only matching members of the stated receiver types if every use in those branches states its receiver type. Periphery recognizes `TypeName.member`, `TypeName().member`, and receiver variables with a type annotation in the same branch, such as `let value: TypeName`. If any use omits the receiver type in the branch, such as `value.member()` when `value` has its declaration outside the branch, Periphery retains every declaration with that name.
+
+This can be disabled with `--disable-platform-conditional-retention`. Other conditions, such as `#if DEBUG`, are not covered, see [Code referenced within a preprocessor macro conditional branch is unused](#code-referenced-within-a-preprocessor-macro-conditional-branch-is-unused).
+
 ### Objective-C
 
 Periphery cannot analyze Objective-C code since types may be dynamically typed.
@@ -328,6 +341,8 @@ Any class that inherits `XCTestCase` is automatically retained along with its te
 
 If your project contains Interface Builder files (such as storyboards and XIBs), Periphery will take these into account when identifying unused declarations. Periphery parses these files to identify which classes, `@IBOutlet` properties, `@IBAction` methods, and `@IBInspectable` properties are actually referenced. Only those members that are connected in the Interface Builder file will be retained. Any `@IB*` members that are declared but not connected will be reported as unused.
 
+Files inside Xcode 16+ synchronized folders (`PBXFileSystemSynchronizedRootGroup`) are supported: they are collected per target, honouring each target's membership exceptions.
+
 ### SPI (System Programming Interface)
 
 Swift's `@_spi` attribute marks declarations as pseudo-private, making them accessible only to clients that explicitly import the SPI. While these declarations are technically `public`, they're intended for internal or restricted use.
@@ -340,6 +355,48 @@ For example, with `--retain-public --no-retain-spi Internal`, Periphery will:
 - **Check** `@_spi(Internal) public` declarations for unused code
 
 This is particularly useful for internal SPIs that should be audited for unused code while still retaining the framework's public API.
+
+### Localized Strings
+
+Periphery can identify unused localized strings in String Catalog (`.xcstrings`) files. Catalogues are discovered from Xcode target resources (including synchronized folders), SPM target `resources`, Bazel `AppleResourceInfo` and the `xcstrings` key of a generic project configuration. This analysis can be disabled with `--disable-unused-localized-string-analysis` (or `disable_unused_localized_string_analysis: true` in `.periphery.yml`).
+
+A key is considered used when a static string literal with the same value is:
+
+- Passed to a parameter of type `LocalizedStringKey`, `LocalizedStringResource`, `String.LocalizationValue`, `DisplayRepresentation` or `IntentDescription` (including optionals, arrays and variadics). The parameter type is resolved from the index store, so this covers SwiftUI initializers and modifiers (`Text`, `Button`, `Label`, `Toggle`, `Section`, `navigationTitle`, ...), `String(localized:)`, as well as your own functions and initializers. A literal passed to a plain `String` parameter (e.g. `Label("title", systemImage: "star")`'s `systemImage`) is not considered a key.
+- Passed to `NSLocalizedString`, `Bundle.localizedString(forKey:)`, `LocalizedStringKey(_:)`, `LocalizedStringResource(_:)` or `Text(_:)`, matched by name.
+- Assigned to, returned from, or used as the default value of a declaration annotated with one of the types above (e.g. `static let title: LocalizedStringResource = "key"`).
+
+When the called function cannot be resolved (e.g. calling a closure, an enum case constructor or an Objective-C method), the literals passed to it are conservatively considered keys. Ternaries and array literals of string literals are looked through.
+
+Catalogues matching the `--localized-string-catalog-exclude` globs (`localized_string_catalog_exclude` in `.periphery.yml`) are not analysed. By default `**/InfoPlist.xcstrings` and `**/AppShortcuts.xcstrings` are excluded, since their keys are consumed by the system rather than referenced from Swift source. Setting the option replaces the default list, so include these patterns if you add your own:
+
+```yaml
+localized_string_catalog_exclude:
+  - "**/InfoPlist.xcstrings"
+  - "**/AppShortcuts.xcstrings"
+  - "**/DefaultCategories.xcstrings"
+```
+
+> [!NOTE]
+>
+> - Periphery matches keys regardless of the `table:` and `bundle:` arguments. A static literal anywhere in the scanned code retains the matching key in every catalog.
+> - Periphery does not detect keys referenced through Xcode 26+ generated symbols, such as `Text(.myKey)`.
+> - Periphery matches interpolated literals to catalog keys with a format specifier in place of each interpolation. For example, `Text("count \(n) items")` retains `count %lld items`. Periphery does not check whether the specifier matches the interpolated type.
+> - Periphery cannot resolve keys built from runtime values, such as `LocalizedStringKey(name)`, `String.LocalizationValue(name)`, `NSLocalizedString(name, comment:)`, or `Bundle.localizedString(forKey: name, ...)`. When a module contains such a call without a literal prefix, Periphery does not report any key in the catalogs that module owns. A runtime key in one module does not retain keys in catalogs owned by another module.
+> - When a runtime key expression starts with a string literal, such as `LocalizedStringKey("settings." + name)`, Periphery retains only keys that start with that literal. The `--verbose` output lists each runtime key call site, including calls with literal prefixes.
+> - Target membership determines which module owns a catalog. Periphery uses the SwiftPM target `resources` list and target directory, or the Xcode target resources build phase and synchronized folders. Periphery does not report keys from catalogs without target membership, including catalogs listed in a generic project configuration or found by a Bazel scan. The `--verbose` output lists each such catalog.
+>
+> Periphery can exclude a dedicated catalog of runtime keys with `localized_string_catalog_exclude`. Conditional expressions with static literals also let Periphery identify each possible key:
+>
+> ```swift
+> var message: String {
+>     if condition {
+>         String(localized: "message_success")
+>     } else {
+>         String(localized: "message_failure")
+>     }
+> }
+> ```
 
 ## Comment Commands
 
@@ -456,7 +513,12 @@ The index store generated by `xcodebuild` exists in DerivedData at a location de
 
 ### SwiftPM
 
-By default, Periphery looks for the index store at `.build/debug/index/store`. Therefore, if you intend to run Periphery directly after calling `swift test`, you can omit the `--index-store-path` option, and Periphery will use the index store created when the project was built for testing. However, if this isn't the case, then you must provide Periphery the location of the index store with `--index-store-path`.
+By default, Periphery asks SwiftPM where it places build products (`swift build --show-bin-path`, honouring the `-c`/`--configuration`, `--scratch-path`, `--build-system` and `--triple` options passed after `--`) and looks for the index store next to them:
+
+- Swift 6.4 and later (default `swiftbuild` backend): `<scratch path>/out`, e.g. `.build/out` (it contains `v5/units` and `v5/records`).
+- The `native` backend: `<bin path>/index/store`, e.g. `.build/debug/index/store` or `.build/arm64-apple-macosx/debug/index/store`.
+
+Therefore, if you intend to run Periphery directly after calling `swift test`, you can omit the `--index-store-path` option, and Periphery will use the index store created when the project was built for testing, provided you pass the same build options (e.g. `periphery scan --skip-build -- -c release`). If no index store is found, Periphery fails and lists the locations it tried. If the project wasn't built that way, you must provide Periphery the location of the index store with `--index-store-path`.
 
 ## Build Systems
 
@@ -499,6 +561,9 @@ Periphery can analyze projects using other build systems, though it cannot drive
     ],
     "xcmappingmodels": [
         "path/to/file.xcmappingmodel"
+    ],
+    "xcstrings": [
+        "path/to/Localizable.xcstrings"
     ]
 }
 ```
@@ -573,6 +638,59 @@ Due to some underlying bugs in Swift, Periphery may in some instances report inc
 | [56327](https://github.com/apple/swift/issues/56327) | Index store does not relate objc optional protocol method implemented in subclass |
 | [56189](https://github.com/apple/swift/issues/56189) | Index store should relate appendInterpolation from string literals |
 | [56165](https://github.com/apple/swift/issues/56165) | Index store does not relate constructor via literal notation |
+
+## Credits
+
+This fork includes fixes under the MIT License from [tiny-earth-moon/periphery](https://github.com/tiny-earth-moon/periphery), which `tiny-earth-moon` maintains as a fork of [peripheryapp/periphery](https://github.com/peripheryapp/periphery). The import uses tag 3.10.0 (commit [e267b6b](https://github.com/tiny-earth-moon/periphery/commit/e267b6be80bf1fdd0432213522978a4c74cd1c49)), and Git history keeps each imported commit with its original author.
+
+The table credits the original reports, earlier implementations, and contributors to the imported changes.
+
+Fix credits:
+
+| Fix | Original report | Earlier implementation | tiny-earth-moon change | Contributors |
+| --- | --- | --- | --- | --- |
+| Deterministic DerivedData path by sorting schemes before hashing | [Issue 1141](https://github.com/peripheryapp/periphery/issues/1141) by `amarcadet` | None | [Issue 5](https://github.com/tiny-earth-moon/periphery/issues/5), [PR 16](https://github.com/tiny-earth-moon/periphery/pull/16) | `tiny-earth-moon` |
+| Platform-conditional retention for `@available(<platform>, unavailable)` and `#if os()` blocks | [Issue 908](https://github.com/peripheryapp/periphery/issues/908) by `Ernest0-Production` | None | [Issue 14](https://github.com/tiny-earth-moon/periphery/issues/14), [PR 18](https://github.com/tiny-earth-moon/periphery/pull/18) | `tiny-earth-moon` |
+| SwiftPM index store lookup through `swift build --show-bin-path` for the Swift 6.4 `swiftbuild` backend | [Issue 1149](https://github.com/peripheryapp/periphery/issues/1149) by `p-linnane` | None | [Issue 2](https://github.com/tiny-earth-moon/periphery/issues/2), [PR 19](https://github.com/tiny-earth-moon/periphery/pull/19) | `tiny-earth-moon` |
+| Xcode synchronized folder membership and exceptions | [Issue 1114](https://github.com/peripheryapp/periphery/issues/1114) by `iorecicSA` | None | [Issue 6](https://github.com/tiny-earth-moon/periphery/issues/6), [PR 20](https://github.com/tiny-earth-moon/periphery/pull/20) | `tiny-earth-moon` |
+| Glob expansion of directories named `**` | [Issue 1144](https://github.com/peripheryapp/periphery/issues/1144) by `ZevEisenberg` | [PR 1145](https://github.com/peripheryapp/periphery/pull/1145) by `ZevEisenberg` | [Issue 4](https://github.com/tiny-earth-moon/periphery/issues/4), [PR 22](https://github.com/tiny-earth-moon/periphery/pull/22) | `ZevEisenberg` |
+| `xcodebuild -list` DerivedData location and `--clean-build` | [Issue 1146](https://github.com/peripheryapp/periphery/issues/1146) by `lukaskollmer` | [PR 1147](https://github.com/peripheryapp/periphery/pull/1147) by `lukaskollmer` | [Issue 3](https://github.com/tiny-earth-moon/periphery/issues/3), [PR 25](https://github.com/tiny-earth-moon/periphery/pull/25) | `lukaskollmer`, `tiny-earth-moon` |
+| Regression test for a property wrapper referenced in `#if !os(...)` | [Issue 1121](https://github.com/peripheryapp/periphery/issues/1121) by `pylapp` | None | [Issue 8](https://github.com/tiny-earth-moon/periphery/issues/8), [PR 27](https://github.com/tiny-earth-moon/periphery/pull/27) | `tiny-earth-moon` |
+| Redundant public accessibility analysis for public result builders used from another module | [Issue 1112](https://github.com/peripheryapp/periphery/issues/1112) by `juicyfru1t` | None | [Issue 10](https://github.com/tiny-earth-moon/periphery/issues/10), [PR 28](https://github.com/tiny-earth-moon/periphery/pull/28) | `tiny-earth-moon` |
+| `--retain-public` for public macros and associated types | [Issue 1131](https://github.com/peripheryapp/periphery/issues/1131) by `rgoldberg` | None | [Issue 7](https://github.com/tiny-earth-moon/periphery/issues/7), [PR 31](https://github.com/tiny-earth-moon/periphery/pull/31) | `tiny-earth-moon` |
+| Private Interface Builder members in SwiftPM targets | [Issue 1089](https://github.com/peripheryapp/periphery/issues/1089) by `SmallRedGollum` | [PR 1096](https://github.com/peripheryapp/periphery/pull/1096) by `ileitch` | [Issue 13](https://github.com/tiny-earth-moon/periphery/issues/13), [PR 32](https://github.com/tiny-earth-moon/periphery/pull/32) | `tiny-earth-moon` |
+| Tests for SwiftUI `@State` properties read only through `$name` or `_name` with Xcode 27 | [Issue 36](https://github.com/tiny-earth-moon/periphery/issues/36) by `rishabhtpdl` | None | [Issue 36](https://github.com/tiny-earth-moon/periphery/issues/36), [PR 37](https://github.com/tiny-earth-moon/periphery/pull/37) by `rishabhtpdl` (closed), [PR 38](https://github.com/tiny-earth-moon/periphery/pull/38) | `rishabhtpdl`, `tiny-earth-moon` |
+| All implicit result builder entry points, including `buildBlock` of any arity and `buildPartialBlock` | [Issue 30](https://github.com/tiny-earth-moon/periphery/issues/30) by `tiny-earth-moon` | None | [Issue 30](https://github.com/tiny-earth-moon/periphery/issues/30), [PR 39](https://github.com/tiny-earth-moon/periphery/pull/39) | `tiny-earth-moon` |
+| Core Data models in SwiftPM targets | [Issue 33](https://github.com/tiny-earth-moon/periphery/issues/33) by `tiny-earth-moon` | None | [Issue 33](https://github.com/tiny-earth-moon/periphery/issues/33), [PR 40](https://github.com/tiny-earth-moon/periphery/pull/40) | `tiny-earth-moon` |
+| Redundant public accessibility regression tests | [Issue 1111](https://github.com/peripheryapp/periphery/issues/1111) by `juicyfru1t`, [Issue 1108](https://github.com/peripheryapp/periphery/issues/1108) by `AllDmeat` | None | [Issue 11](https://github.com/tiny-earth-moon/periphery/issues/11), [Issue 12](https://github.com/tiny-earth-moon/periphery/issues/12), [PR 42](https://github.com/tiny-earth-moon/periphery/pull/42) | `tiny-earth-moon` |
+| Regression tests for an ignore comment on the first line of an extension | [Issue 1113](https://github.com/peripheryapp/periphery/issues/1113) by `rgoldberg` | None | [Issue 9](https://github.com/tiny-earth-moon/periphery/issues/9), [PR 46](https://github.com/tiny-earth-moon/periphery/pull/46) | `tiny-earth-moon` |
+| Code referenced only from previews of used SwiftUI views | [Issue 1061](https://github.com/peripheryapp/periphery/issues/1061) by `danwood` | None | [Issue 15](https://github.com/tiny-earth-moon/periphery/issues/15), [PR 47](https://github.com/tiny-earth-moon/periphery/pull/47) | `tiny-earth-moon` |
+| Redundant public accessibility analysis for public members in non-public extensions | [Issue 45](https://github.com/tiny-earth-moon/periphery/issues/45) by `tiny-earth-moon` | None | [Issue 45](https://github.com/tiny-earth-moon/periphery/issues/45), [PR 50](https://github.com/tiny-earth-moon/periphery/pull/50) | `tiny-earth-moon` |
+| `ExpressibleByArgument` conformances qualified with their module | [Issue 53](https://github.com/tiny-earth-moon/periphery/issues/53) by `tiny-earth-moon` | None | [Issue 53](https://github.com/tiny-earth-moon/periphery/issues/53), [PR 54](https://github.com/tiny-earth-moon/periphery/pull/54) | `tiny-earth-moon` |
+| Unused String Catalog (`.xcstrings`) keys, type-based key detection, and `localized_string_catalog_exclude` | [Issue 893](https://github.com/peripheryapp/periphery/issues/893) by `Kaspik` | [PR 1029](https://github.com/peripheryapp/periphery/pull/1029) by `ileitch` ([commit e7b0f206](https://github.com/peripheryapp/periphery/commit/e7b0f20606bb11439bd54604de457840b410fc3e)) | [Issue 55](https://github.com/tiny-earth-moon/periphery/issues/55), [Issue 58](https://github.com/tiny-earth-moon/periphery/issues/58), [PR 56](https://github.com/tiny-earth-moon/periphery/pull/56), [PR 59](https://github.com/tiny-earth-moon/periphery/pull/59) | `ileitch`, `tiny-earth-moon` |
+
+This fork handles SwiftUI `@State` reads through its `SwiftUIRetainer` instead of the imported `MacroWrappedPropertyReferenceBuilder`. It reports a `@State` property as unused when code assigns it only through `_name = State(...)` and never reads it, and keeps the imported tests for `$name` reads, `_name` reads, and property wrappers. Platform-conditional retention selects one declaration among several with the same name only when the branch states the receiver type. String Catalog analysis matches interpolated literals to format keys and suppresses unused-key reports for a module with runtime keys, limiting that suppression to a literal prefix when present. It determines catalog ownership from target membership and fails the scan when it cannot read or parse a catalog. Tests build real packages and run real `xcodebuild` in place of shell stubs and recorded output. This fork does not import the release automation, workflows, issue templates, version and dependency pins, or fork maintenance text from `tiny-earth-moon`.
+
+## Releases
+
+Every pull request into the default branch must have exactly one label from the table below. Classify each pull request by its effect on shipped behavior and compatibility, never by diff size or line count. The "Release label" check fails when a pull request lacks a `release:*` label, has more than one, or uses an unknown `release:*` label. Its error message identifies the pull request and the label to add or remove.
+
+Release labels:
+
+| Label | Use when | Example from 3.8.0-agoodkind.7 |
+| --- | --- | --- |
+| `release:major` | The change breaks compatibility with the CLI, configuration, or output format or schema. | `4.0.0-agoodkind.1` |
+| `release:minor` | The change adds a compatible new capability. | `3.9.0-agoodkind.1` |
+| `release:patch` | The change makes a compatible fix, including a corrected finding or a false-positive fix. | `3.8.1-agoodkind.1` |
+| `release:none` | The change does not affect shipped behavior, such as changes limited to documentation, tests, CI, or release tooling. | No release |
+
+Versions use `MAJOR.MINOR.PATCH-agoodkind.N` and compare numerically: `3.10.0` is newer than `3.9.0`.
+
+The release workflow runs on every push to the default branch. It considers every pull request merged since the newest complete published release that is an ancestor of the source commit. The highest release label determines one bump for the entire release, never one bump per commit. Several `release:patch` pull requests produce one patch bump. The workflow does not publish a release when every pull request in that range uses `release:none`.
+
+Before building, the workflow reserves the new version by pushing the Git ref `refs/release-reservations/<version>` at the source commit. A reservation is not a published release. The workflow creates the release tag only when it publishes. New versions start above every existing tag and reservation, and two commits never receive the same version.
+
+A retry reuses the commit's reservation, or its tag if publication had started, even when another commit reserved or published a newer version in between. If the retry publishes a version older than the newest complete published release, it does not make that version the latest GitHub release or change the Homebrew formula. Published tags and their assets never change.
 
 ## Sponsors ![Sponsors](assets/sponsor-20.svg)
 

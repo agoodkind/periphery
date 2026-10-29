@@ -1,0 +1,26 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "interpolation_count %lld items" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld items" } }
+      }
+    },
+    "interpolation_greeting %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hello %@" } }
+      }
+    },
+    "interpolation_ratio %lf" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ratio %lf" } }
+      }
+    },
+    "interpolation_unrelated_key" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unrelated" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

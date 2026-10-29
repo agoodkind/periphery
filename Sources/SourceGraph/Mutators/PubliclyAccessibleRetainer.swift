@@ -16,7 +16,7 @@ final class PubliclyAccessibleRetainer: SourceGraphMutator {
     func mutate() {
         guard configuration.retainPublic else { return }
 
-        let declarations = Declaration.Kind.accessibleKinds.flatMap {
+        let declarations = Declaration.Kind.accessibleKinds.union([.macro, .associatedtype]).flatMap {
             graph.declarations(ofKind: $0)
         }
 

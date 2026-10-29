@@ -35,6 +35,7 @@ public final class SourceGraphMutatorRunner {
         DynamicMemberRetainer.self,
         UnusedParameterRetainer.self,
         AssetReferenceRetainer.self,
+        LocalizedStringRetainer.self,
         EntryPointAttributeRetainer.self,
         PubliclyAccessibleRetainer.self,
         XCTestRetainer.self,
@@ -47,6 +48,7 @@ public final class SourceGraphMutatorRunner {
         CodablePropertyRetainer.self,
         EquatableHashablePropertyRetainer.self,
         ExternalOverrideRetainer.self,
+        PlatformConditionalRetainer.self,
 
         AncestralReferenceEliminator.self,
         AssignOnlyPropertyReferenceEliminator.self,

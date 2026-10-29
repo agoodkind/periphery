@@ -52,7 +52,8 @@ open class SourceGraphTestCase: XCTestCase {
                 plistPaths: plan.plistPaths,
                 xibPaths: plan.xibPaths,
                 xcDataModelPaths: plan.xcDataModelPaths,
-                xcMappingModelPaths: plan.xcMappingModelPaths
+                xcMappingModelPaths: plan.xcMappingModelPaths,
+                xcStringsPaths: plan.xcStringsPaths
             )
         }
 
@@ -106,6 +107,12 @@ open class SourceGraphTestCase: XCTestCase {
             if !Self.results.unusedDeclarations.contains(declaration) {
                 XCTFail("Expected declaration to not be referenced: \(declaration)", file: file, line: line)
             }
+        }
+    }
+
+    func assertNotIndexed(_ description: DeclarationDescription, file: StaticString = #file, line: UInt = #line) {
+        if let declaration = materialize(description, in: Self.allIndexedDeclarations, fail: false, file: file, line: line) {
+            XCTFail("Expected declaration to not be indexed: \(declaration)", file: file, line: line)
         }
     }
 

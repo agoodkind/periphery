@@ -1,0 +1,21 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "dynamic_plain_key" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Plain" } }
+      }
+    },
+    "dynamic_runtime_key" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Runtime" } }
+      }
+    },
+    "dynamic_unreferenced_key" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unreferenced" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

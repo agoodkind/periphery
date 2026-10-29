@@ -60,6 +60,9 @@ struct ScanCommand: ParsableCommand {
     @Option(parsing: .upToNextOption, help: "Public SPIs (System Programming Interfaces) to check for unused code even when '--retain-public' is enabled")
     var noRetainSPI: [String] = defaultConfiguration.$noRetainSPI.defaultValue
 
+    @Flag(help: "Disable retention of declarations that are unavailable on a platform, or referenced from platform conditional compilation blocks")
+    var disablePlatformConditionalRetention: Bool = defaultConfiguration.$disablePlatformConditionalRetention.defaultValue
+
     @Flag(help: "Disable identification of redundant public accessibility")
     var disableRedundantPublicAnalysis: Bool = defaultConfiguration.$disableRedundantPublicAnalysis.defaultValue
 
@@ -68,6 +71,11 @@ struct ScanCommand: ParsableCommand {
 
     @Flag(inversion: .prefixedNo, help: "Report superfluous ignore comments")
     var superfluousIgnoreComments: Bool = defaultConfiguration.$superfluousIgnoreComments.defaultValue
+    @Flag(help: "Disable identification of unused localized strings from String Catalogs (xcstrings)")
+    var disableUnusedLocalizedStringAnalysis: Bool = defaultConfiguration.$disableUnusedLocalizedStringAnalysis.defaultValue
+
+    @Option(parsing: .upToNextOption, help: "String Catalog (xcstrings) file globs to exclude from unused localized string analysis")
+    var localizedStringCatalogExclude: [String] = defaultConfiguration.$localizedStringCatalogExclude.defaultValue
 
     @Option(parsing: .upToNextOption, help: "Names of unused imported modules to retain")
     var retainUnusedImportedModules: [String] = defaultConfiguration.$retainUnusedImportedModules.defaultValue
@@ -202,8 +210,11 @@ struct ScanCommand: ParsableCommand {
         configuration.apply(\.$retainUnusedProtocolFuncParams, retainUnusedProtocolFuncParams)
         configuration.apply(\.$retainSwiftUIPreviews, retainSwiftUIPreviews)
         configuration.apply(\.$disableRedundantPublicAnalysis, disableRedundantPublicAnalysis)
+        configuration.apply(\.$disablePlatformConditionalRetention, disablePlatformConditionalRetention)
         configuration.apply(\.$disableUnusedImportAnalysis, disableUnusedImportAnalysis)
         configuration.apply(\.$superfluousIgnoreComments, superfluousIgnoreComments)
+        configuration.apply(\.$disableUnusedLocalizedStringAnalysis, disableUnusedLocalizedStringAnalysis)
+        configuration.apply(\.$localizedStringCatalogExclude, localizedStringCatalogExclude)
         configuration.apply(\.$retainUnusedImportedModules, retainUnusedImportedModules)
         configuration.apply(\.$externalEncodableProtocols, externalEncodableProtocols)
         configuration.apply(\.$externalCodableProtocols, externalCodableProtocols)
@@ -336,8 +347,8 @@ struct ScanCommand: ParsableCommand {
     }
 }
 
-extension OutputFormat: ExpressibleByArgument {}
-extension ColorOption: ExpressibleByArgument {}
+extension OutputFormat: ArgumentParser.ExpressibleByArgument {}
+extension ColorOption: ArgumentParser.ExpressibleByArgument {}
 
 extension FilePath: ArgumentParser.ExpressibleByArgument {
     public init?(argument: String) {
