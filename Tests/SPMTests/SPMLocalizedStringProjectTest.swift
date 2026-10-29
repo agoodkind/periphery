@@ -72,6 +72,56 @@
         }
     }
 
+    final class SPMLocalizedStringProjectScanCommandTest: XCTestCase {
+        func testScanCommandReportsOnlyUnusedLiteralKeys() throws {
+            let reportedKeys = try runScan()
+
+            XCTAssertTrue(reportedKeys.contains("plain_unused_key"), "\(reportedKeys)")
+            XCTAssertFalse(reportedKeys.contains("plain_ternary_first_key"), "\(reportedKeys)")
+            XCTAssertFalse(reportedKeys.contains("plain_ternary_second_key"), "\(reportedKeys)")
+            XCTAssertFalse(reportedKeys.contains("mixed_known_key"), "\(reportedKeys)")
+            XCTAssertFalse(reportedKeys.contains("mixed_runtime_key"), "\(reportedKeys)")
+            XCTAssertFalse(reportedKeys.contains("mixed_unreferenced_key"), "\(reportedKeys)")
+        }
+
+        // MARK: - Private
+
+        private func runScan() throws -> Set<String> {
+            let testBundle = try XCTUnwrap(Bundle.allBundles.first { $0.bundlePath.hasSuffix(".xctest") })
+            let executableURL = testBundle.bundleURL.deletingLastPathComponent().appendingPathComponent("periphery")
+            let process = Process()
+            process.executableURL = executableURL
+            process.arguments = [
+                "scan",
+                "--disable-update-check",
+                "--project-root", SPMLocalizedStringProjectPath.string,
+                "--",
+                "--build-system", "native",
+            ]
+            let outputPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = outputPipe
+            try process.run()
+            let outputData = try outputPipe.fileHandleForReading.readToEnd() ?? Data()
+            process.waitUntilExit()
+
+            let output = try XCTUnwrap(String(bytes: outputData, encoding: .utf8))
+            XCTAssertEqual(process.terminationStatus, 0, output)
+
+            let marker = "Unused localized string '"
+            var keys: Set<String> = []
+            for line in output.split(separator: "\n") {
+                guard let markerRange = line.range(of: marker) else { continue }
+
+                let remainder = line[markerRange.upperBound...]
+                guard let closingQuote = remainder.firstIndex(of: "'") else { continue }
+
+                keys.insert(String(remainder[..<closingQuote]))
+            }
+            return keys
+        }
+    }
+
     final class SPMLocalizedStringUnownedCatalogTest: SPMSourceGraphTestCase {
         private static var temporaryDirectory: FilePath!
 
