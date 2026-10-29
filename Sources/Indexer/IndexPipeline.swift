@@ -1,8 +1,10 @@
 import Configuration
 import Foundation
+import IndexStore
 import Logger
 import Shared
 import SourceGraph
+import SyntaxAnalysis
 
 public struct IndexPipeline {
     private let plan: IndexPlan
@@ -20,13 +22,26 @@ public struct IndexPipeline {
     }
 
     public func perform() throws -> Int {
+        let generatedFiles = plan.sourceFiles.filter { file, _ in
+            SourceFileCollector.isGeneratedStringSymbols(file.path)
+        }
+        let sourceFiles = plan.sourceFiles.filter { generatedFiles[$0.key] == nil }
+        let generatedKeys = try generatedKeysByUsr(generatedFiles)
+        logger.debug("Read \(generatedKeys.count) generated localization symbols from \(generatedFiles.count) files")
         let scannedLOC = try SwiftIndexer(
-            sourceFiles: plan.sourceFiles,
+            sourceFiles: sourceFiles,
             graph: graph,
             logger: logger,
             configuration: configuration,
-            swiftVersion: swiftVersion
+            swiftVersion: swiftVersion,
+            generatedStringSymbolUsrs: Set(generatedKeys.keys)
         ).perform()
+
+        graph.withLock { graph in
+            for (usr, keys) in generatedKeys where !graph.references(to: usr).isEmpty {
+                graph.addUsedLocalizedStringKeys(keys)
+            }
+        }
 
         if !plan.plistPaths.isEmpty {
             try InfoPlistIndexer(
@@ -75,5 +90,27 @@ public struct IndexPipeline {
 
         graph.withLock { $0.indexingComplete() }
         return scannedLOC
+    }
+
+    private func generatedKeysByUsr(_ files: [SourceFile: [IndexUnit]]) throws -> [String: Set<String>] {
+        var keysByUsr: [String: Set<String>] = [:]
+        for (file, units) in files {
+            let source = try String(contentsOfFile: file.path.string, encoding: .utf8)
+            let keysByLine = GeneratedStringSymbols.keys(in: source)
+            for unit in units {
+                guard let recordName = unit.unit.recordName else { continue }
+
+                let record = try RecordReader(indexStore: unit.store, recordName: recordName)
+                record.forEach(occurrence: { occurrence in
+                    guard occurrence.roles.contains(.definition),
+                          let key = keysByLine[occurrence.location.line],
+                          [.staticProperty, .staticMethod].contains(occurrence.symbol.kind)
+                    else { return }
+
+                    keysByUsr[occurrence.symbol.usr, default: []].insert(key)
+                })
+            }
+        }
+        return keysByUsr
     }
 }
