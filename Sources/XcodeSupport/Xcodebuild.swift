@@ -58,7 +58,7 @@ public final class Xcodebuild {
     /// removes the DerivedData folder used to build the specified schemes
     public func removeDerivedData(for project: XcodeProjectlike, allSchemes: [String]) throws {
         let path = try derivedDataPath(for: project, schemes: allSchemes).string
-        try self.shell.exec(["rm", "-rf", path])
+        try shell.exec(["rm", "-rf", path])
     }
 
     public func indexStorePath(project: XcodeProjectlike, schemes: [String]) throws -> FilePath {
@@ -81,7 +81,7 @@ public final class Xcodebuild {
     }
 
     func schemes(type: String, path: String, additionalArguments: [String]) throws -> Set<String> {
-        let args = [
+        let args = try [
             "-\(type)", "\"\(path.withEscapedQuotes)\"",
             "-list",
             "-json",
@@ -93,7 +93,7 @@ public final class Xcodebuild {
             // `-derivedDataPath <path>/<xcode-default-hashed-folder-name>`.
             // this is not a problem, since we still can scope the folders on a per-project
             // and per-xcode-version level; the actual contents just happen to be one level deeper.
-            "-IDECustomDerivedDataLocation='\(try derivedDataPath(projectIdentifier: path, schemes: []).string)'",
+            "-IDECustomDerivedDataLocation='\(derivedDataPath(projectIdentifier: path, schemes: []).string)'",
         ]
 
         let quotedArguments = quote(arguments: additionalArguments)
@@ -143,7 +143,7 @@ public final class Xcodebuild {
         // contain two records for that source file. One reflects the state of the file when scheme A was built, and the
         // other when B was built. We must therefore key the DerivedData path with the full list of schemes being built.
         var name = "DerivedData"
-        name += "-\(try version().djb2Hex)"
+        try name += "-\(version().djb2Hex)"
         name += "-\(projectIdentifier.djb2Hex)"
         if !schemes.isEmpty {
             name += "-\(schemes.sorted().joined().djb2Hex)"

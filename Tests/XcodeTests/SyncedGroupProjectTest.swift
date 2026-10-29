@@ -67,8 +67,8 @@ final class SyncedGroupProjectTest: XCTestCase {
         let target = try identifiedTarget("App")
         let relativePaths = target.files(kind: .interfaceBuilder).map { $0.relativeTo(SyncedGroupProjectRoot).string }
 
-        XCTAssertEqual(relativePaths.filter { $0.hasSuffix("Referenced.xib") }.count, 1)
-        XCTAssertEqual(relativePaths.filter { $0.hasSuffix("Included.xib") }.count, 1)
+        XCTAssertEqual(relativePaths.count(where: { $0.hasSuffix("Referenced.xib") }), 1)
+        XCTAssertEqual(relativePaths.count(where: { $0.hasSuffix("Included.xib") }), 1)
     }
 
     func testDoesNotTreatSynchronizedGroupPlistsAsInfoPlists() throws {
@@ -89,7 +89,7 @@ final class SyncedGroupProjectTest: XCTestCase {
     }
 
     private func interfaceBuilderFiles(of name: String) throws -> Set<String> {
-        Set(try identifiedTarget(name).files(kind: .interfaceBuilder).map {
+        try Set(identifiedTarget(name).files(kind: .interfaceBuilder).map {
             $0.relativeTo(SyncedGroupProjectRoot).string
         })
     }
