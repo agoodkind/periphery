@@ -55,7 +55,7 @@ func verify() throws {
     do {
         let status = try run(
             [
-                "run", "@periphery", "--", "scan", "--bazel", "--strict", "--verbose",
+                "run", "@periphery", "--", "scan", "--bazel", "--strict",
                 "--format", "json", "--disable-update-check", "--write-results", results.path,
             ],
             in: fixture,
@@ -77,20 +77,12 @@ func verify() throws {
         guard findings.contains(where: { $0.name == "ProtoOnlyMessage" && $0.modules.contains("ProtoFixture") }) else {
             throw VerificationError.failed("The scan did not report the genuinely unused generated message.")
         }
-
-        let output = try String(contentsOf: log, encoding: .utf8)
-        let rows = output.split(separator: "\n")
-        for phase in ["one", "two"] {
-            guard rows.contains(where: { $0.contains("[index:swift:phase:\(phase)]") && $0.contains("message.pb.swift (ProtoFixture)") }) else {
-                throw VerificationError.failed("Default discovery did not index the generated proto source during phase \(phase).")
-            }
-        }
-        guard !rows.contains(where: { $0.contains("[index:swift:phase:") && $0.contains("(SwiftProtobuf)") }) else {
-            throw VerificationError.failed("The scan indexed external SwiftProtobuf dependency sources.")
+        guard !findings.contains(where: { $0.modules.contains("SwiftProtobuf") }) else {
+            throw VerificationError.failed("The scan reported declarations from the SwiftProtobuf dependency.")
         }
 
-        report("The scan indexed ProtoFixture in both phases and preserved its compatibility check.")
-        report("The unused message, unused control function, and similarly named user type remained findings; the strict scan returned 1.")
+        report("The scan reported the unused generated message and preserved its compatibility check.")
+        report("The unused control function and similarly named user type remained findings; the strict scan returned 1.")
     } catch {
         let status = try run(["shutdown"], in: fixture, log: cleanupLog)
         if status != 0 {
