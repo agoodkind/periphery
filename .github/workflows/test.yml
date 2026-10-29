@@ -27,7 +27,9 @@ jobs:
           repository: agoodkind/homebrew-tap
           path: homebrew-tap
           persist-credentials: false
-      - name: Test signed release publication
+      - name: Test release versioning and signed publication
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: swift .github/scripts/release-tests.swift .github/scripts/release.swift homebrew-tap/Formula/periphery.rb
   lint:
     runs-on: macos-26

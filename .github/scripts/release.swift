@@ -173,16 +173,28 @@ struct GitHub {
         return data
     }
 
-    func release(_ version: String) async throws -> GitHubRelease? {
+    func releases() async throws -> [GitHubRelease] {
         var page = 1
+        var all: [GitHubRelease] = []
         while true {
             let data = try await request("repos/\(repository)/releases?per_page=100&page=\(page)")
 
             let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
-            if let release = releases.first(where: { $0.tagName == version }) { return release }
-            if releases.count < 100 { return nil }
+            all += releases
+            if releases.count < 100 { return all }
             page += 1
         }
+    }
+
+    func release(_ version: String) async throws -> GitHubRelease? {
+        try await releases().first { $0.tagName == version }
+    }
+
+    func completeReleases() async throws -> [String] {
+        try await releases().filter { release in
+            let names = Set(release.assets.map(\.name))
+            return !release.isDraft && ReleaseContext.assetNames(release.tagName).allSatisfy(names.contains)
+        }.map(\.tagName)
     }
 
     func send(_ path: String, method: String, value: some Encodable) async throws -> Data {
@@ -190,37 +202,258 @@ struct GitHub {
     }
 }
 
+enum ReleaseLabel: String, CaseIterable, Comparable {
+    case noRelease = "release:none"
+    case patch = "release:patch"
+    case minor = "release:minor"
+    case major = "release:major"
+
+    static let prefix = "release:"
+    static let choices = allCases.reversed().map(\.rawValue).joined(separator: ", ")
+
+    static func < (lhs: ReleaseLabel, rhs: ReleaseLabel) -> Bool {
+        allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!
+    }
+}
+
+struct ReleaseVersion: Comparable, CustomStringConvertible {
+    static let marker = "-agoodkind."
+    static let format = "MAJOR.MINOR.PATCH-agoodkind.N"
+
+    let major: Int
+    let minor: Int
+    let patch: Int
+    let build: Int
+
+    var description: String { "\(major).\(minor).\(patch)\(Self.marker)\(build)" }
+
+    static func < (lhs: ReleaseVersion, rhs: ReleaseVersion) -> Bool {
+        (lhs.major, lhs.minor, lhs.patch, lhs.build) < (rhs.major, rhs.minor, rhs.patch, rhs.build)
+    }
+
+    static func parse(_ name: String) throws -> ReleaseVersion? {
+        let halves = name.components(separatedBy: marker)
+        guard halves.count == 2 else { return nil }
+
+        let fields = halves[0].split(separator: ".", omittingEmptySubsequences: false).map(String.init) + [halves[1]]
+        guard fields.count == 4, fields.allSatisfy(isDecimal) else { return nil }
+
+        let numbers = fields.compactMap { Int($0) }
+        guard numbers.count == fields.count else {
+            throw ReleaseError("Tag or reservation \(name) has a version number above \(Int.max). Keep every published tag unchanged and ask a maintainer to choose the next release version.")
+        }
+        guard numbers[3] > 0 else { return nil }
+
+        return ReleaseVersion(major: numbers[0], minor: numbers[1], patch: numbers[2], build: numbers[3])
+    }
+
+    static func isDecimal(_ field: String) -> Bool {
+        guard let first = field.first, field.allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
+
+        return first != "0" || field.count == 1
+    }
+
+    func next(_ label: ReleaseLabel) throws -> ReleaseVersion {
+        func increment(_ value: Int, _ component: String) throws -> Int {
+            guard value < Int.max else {
+                throw ReleaseError("Version \(self) has no room for a \(label.rawValue) release because its \(component) number is \(Int.max). Keep every published tag unchanged and ask a maintainer to choose the next release version.")
+            }
+
+            return value + 1
+        }
+        switch label {
+        case .major: return try ReleaseVersion(major: increment(major, "major"), minor: 0, patch: 0, build: 1)
+        case .minor: return try ReleaseVersion(major: major, minor: increment(minor, "minor"), patch: 0, build: 1)
+        case .patch: return try ReleaseVersion(major: major, minor: minor, patch: increment(patch, "patch"), build: 1)
+        case .noRelease: return self
+        }
+    }
+}
+
+struct PullRequestLabels: Codable {
+    let number: Int
+    let labels: [String]
+
+    func releaseLabel() throws -> ReleaseLabel {
+        let releaseLabels = labels.filter { $0.hasPrefix(ReleaseLabel.prefix) }
+        let unknown = releaseLabels.filter { ReleaseLabel(rawValue: $0) == nil }
+        guard unknown.isEmpty else {
+            throw ReleaseError("Remove \(unknown.joined(separator: ", ")) from PR #\(number) and keep exactly one of \(ReleaseLabel.choices)")
+        }
+        guard releaseLabels.count < 2 else {
+            throw ReleaseError("Remove all but one of \(releaseLabels.joined(separator: ", ")) from PR #\(number) so it has exactly one of \(ReleaseLabel.choices)")
+        }
+        guard let name = releaseLabels.first, let label = ReleaseLabel(rawValue: name) else {
+            throw ReleaseError("Add exactly one of \(ReleaseLabel.choices) to PR #\(number)")
+        }
+
+        return label
+    }
+}
+
+struct CommitLabels: Codable {
+    let sha: String
+    let pullRequests: [PullRequestLabels]
+}
+
+struct ReleaseInput: Codable {
+    let publishedReleases: [String]
+    let commits: [CommitLabels]
+
+    static func load() throws -> ReleaseInput {
+        let path = try required("RELEASE_INPUT_PATH")
+        guard let data = files.contents(atPath: path) else {
+            throw ReleaseError("Release input \(path) does not exist. Run the collect-release-input command before prepare.")
+        }
+
+        return try JSONDecoder().decode(ReleaseInput.self, from: data)
+    }
+}
+
+struct AssociatedPullRequest: Decodable {
+    struct Label: Decodable { let name: String }
+
+    let number: Int
+    let mergedAt: String?
+    let labels: [Label]
+
+    enum CodingKeys: String, CodingKey {
+        case number, labels
+        case mergedAt = "merged_at"
+    }
+}
+
+enum VersionSource: String {
+    case requestedTag = "requested-tag"
+    case publishedRelease = "published-release"
+    case incompletePublication = "incomplete-publication"
+    case reservation
+    case newReservation = "new-reservation"
+}
+
+enum ReleasePlan {
+    case existing(ReleaseVersion, VersionSource)
+    case unreleased(predecessor: ReleaseVersion, commits: [String])
+}
+
+let reservationNamespace = "refs/release-reservations/"
+
+func git(_ arguments: [String]) throws -> String {
+    try run("git", arguments, outputMode: .capture)
+}
+
+func lines(_ text: String) -> [String] {
+    text.split(separator: "\n").map(String.init)
+}
+
+func versions(_ names: [String]) throws -> [ReleaseVersion] {
+    try names.compactMap { try ReleaseVersion.parse($0) }
+}
+
+func fetchReleaseRefs() throws {
+    try run("git", ["fetch", "--quiet", "--force", "origin", "+refs/tags/*:refs/tags/*",
+                    "+\(reservationNamespace)*:\(reservationNamespace)*"])
+}
+
+func releaseTags(_ arguments: [String] = []) throws -> [ReleaseVersion] {
+    try versions(lines(git(["tag", "--list"] + arguments)))
+}
+
+func reservations(_ arguments: [String] = []) throws -> [ReleaseVersion] {
+    try versions(lines(git(["for-each-ref", "--format=%(refname:lstrip=2)"] + arguments + [reservationNamespace])))
+}
+
+func isNewestRelease(_ version: ReleaseVersion, published: [String]) throws -> Bool {
+    try versions(published).allSatisfy { $0 <= version }
+}
+
+func releasePlan(head: String, requested: String, published: Set<String>) throws -> ReleasePlan {
+    try fetchReleaseRefs()
+    if !requested.isEmpty {
+        guard let version = try ReleaseVersion.parse(requested), try !lines(git(["tag", "--list", requested])).isEmpty else {
+            throw ReleaseError("REQUESTED_TAG must select an existing \(ReleaseVersion.format) tag")
+        }
+        guard try git(["rev-parse", "\(requested)^{commit}"]) == head else {
+            throw ReleaseError("Requested release tag must identify the checked-out commit")
+        }
+
+        return .existing(version, .requestedTag)
+    }
+    if let tag = try releaseTags(["--points-at", head]).max() {
+        return .existing(tag, published.contains(tag.description) ? .publishedRelease : .incompletePublication)
+    }
+    if let reserved = try reservations(["--points-at", head]).max() {
+        return .existing(reserved, .reservation)
+    }
+    guard let predecessor = try releaseTags(["--merged", head]).filter({ published.contains($0.description) }).max() else {
+        throw ReleaseError("Commit \(head) has no ancestor tag with a complete published release. Run the release workflow with the tag of the newest ancestor release to finish its publication.")
+    }
+
+    let commits = try lines(git(["rev-list", "--first-parent", "--reverse", "\(predecessor)..\(head)"]))
+    return .unreleased(predecessor: predecessor, commits: commits)
+}
+
+func highestLabel(commits: [String], head: String, in input: ReleaseInput) throws -> ReleaseLabel {
+    var entries: [String: [PullRequestLabels]] = [:]
+    for commit in input.commits {
+        entries[commit.sha] = commit.pullRequests
+    }
+    var problems: [String] = []
+    var checked = Set<Int>()
+    var highest = ReleaseLabel.noRelease
+    for sha in commits {
+        guard let pullRequests = entries[sha] else {
+            problems.append("The release input lacks commit \(sha). Run the collect-release-input command on the same checkout before prepare.")
+            continue
+        }
+        guard !pullRequests.isEmpty else {
+            problems.append("Commit \(sha) has no associated merged pull request. Tag commit \(sha) with the release version that matches its change, push the tag, and run the release workflow with that tag.")
+            continue
+        }
+
+        for pullRequest in pullRequests where checked.insert(pullRequest.number).inserted {
+            do {
+                highest = try max(highest, pullRequest.releaseLabel())
+            } catch {
+                problems.append("\(error)")
+            }
+        }
+    }
+    guard problems.isEmpty else {
+        problems.append("Fix each problem above, then run the release workflow again for commit \(head).")
+        throw ReleaseError(problems.joined(separator: "\n"))
+    }
+
+    return highest
+}
+
 struct ReleaseContext {
     let version: String
+    let release: ReleaseVersion
     let root: URL
     let directory: URL
     let github: GitHub
 
     init(version: String, root: URL, github: GitHub) throws {
-        guard Self.suffix(version) != nil else { throw ReleaseError("VERSION must match 3.8.0-agoodkind.N") }
+        guard let release = try ReleaseVersion.parse(version) else {
+            throw ReleaseError("VERSION must match \(ReleaseVersion.format)")
+        }
 
         self.version = version
+        self.release = release
         self.root = root
         self.github = github
         directory = root.appendingPathComponent("release", isDirectory: true)
     }
 
-    static func suffix(_ tag: String) -> Int? {
-        let prefix = "3.8.0-agoodkind."
-        guard tag.hasPrefix(prefix) else { return nil }
-
-        let suffix = tag.dropFirst(prefix.count)
-        guard !suffix.isEmpty, suffix.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
-
-        return Int(suffix)
+    static func assetNames(_ version: String) -> [String] {
+        ["periphery-\(version)-macos-arm64.zip", "periphery-\(version)-macos-arm64.dmg", "install.sh", "checksums.txt"]
     }
 
     var archiveName: String { "periphery-\(version)-macos-arm64.zip" }
     var diskImage: URL { directory.appendingPathComponent("periphery-\(version)-macos-arm64.dmg") }
     var product: URL { directory.appendingPathComponent("periphery-\(version)", isDirectory: true) }
-    var assetNames: [String] {
-        [archiveName, diskImage.lastPathComponent, "install.sh", "checksums.txt"]
-    }
+    var assetNames: [String] { Self.assetNames(version) }
 
     func checkRelease() async throws {
         if let release = try await github.release(version), !release.isDraft {
@@ -339,8 +572,9 @@ struct ReleaseContext {
             let data = try Data(contentsOf: directory.appendingPathComponent(name))
             _ = try await github.request("repos/\(github.repository)/releases/\(release.id)/assets?name=\(name)", method: "POST", body: data, contentType: "application/octet-stream", host: "uploads.github.com")
         }
-        struct Publish: Encodable { let draft = false; let make_latest = "true" }
-        _ = try await github.send("repos/\(github.repository)/releases/\(release.id)", method: "PATCH", value: Publish())
+        struct Publish: Encodable { let draft = false; let make_latest: String }
+        let latest = try isNewestRelease(self.release, published: ReleaseInput.load().publishedReleases) ? "true" : "false"
+        _ = try await github.send("repos/\(github.repository)/releases/\(release.id)", method: "PATCH", value: Publish(make_latest: latest))
     }
 
     func download() async throws {
@@ -374,6 +608,11 @@ struct ReleaseContext {
     }
 
     func homebrew() throws {
+        guard try isNewestRelease(release, published: ReleaseInput.load().publishedReleases) else {
+            print("Homebrew formula keeps the newer published release because \(version) is older than it")
+            return
+        }
+
         let tap = root.appendingPathComponent("homebrew-tap", isDirectory: true)
         let formula = tap.appendingPathComponent("Formula/periphery.rb")
         let digest = try checksum(directory.appendingPathComponent(archiveName))
@@ -409,44 +648,75 @@ struct ReleaseContext {
 }
 
 func prepare() throws {
-    let source = try required("SOURCE_SHA", allowEmpty: true)
+    let sourceSHA = try required("SOURCE_SHA", allowEmpty: true)
     let requested = try required("REQUESTED_TAG", allowEmpty: true)
     let head = try run("git", ["rev-parse", "HEAD"], outputMode: .capture)
-    guard source.isEmpty || source == head else { throw ReleaseError("SOURCE_SHA must equal the checked-out commit \(head)") }
+    guard sourceSHA.isEmpty || sourceSHA == head else { throw ReleaseError("SOURCE_SHA must equal the checked-out commit \(head)") }
 
-    let tags = try run("git", ["tag", "--list", "3.8.0-agoodkind.*"], outputMode: .capture).split(separator: "\n").map(String.init)
-    let version: String
-    if !requested.isEmpty {
-        guard ReleaseContext.suffix(requested) != nil, tags.contains(requested) else {
-            throw ReleaseError("REQUESTED_TAG must select an existing 3.8.0-agoodkind.N tag")
+    let output = try URL(fileURLWithPath: required("GITHUB_OUTPUT"))
+    let version: ReleaseVersion
+    let source: VersionSource
+    let input = try ReleaseInput.load()
+    switch try releasePlan(head: head, requested: requested, published: Set(input.publishedReleases)) {
+    case let .existing(existing, existingSource):
+        version = existing
+        source = existingSource
+    case let .unreleased(predecessor, commits):
+        let label = try highestLabel(commits: commits, head: head, in: input)
+        guard label != .noRelease else {
+            print("Every pull request after published release \(predecessor) uses \(ReleaseLabel.noRelease.rawValue). This run does not publish a release.")
+            try append("release=false\nsource_sha=\(head)\n", to: output)
+            return
         }
-        guard try run("git", ["rev-parse", "\(requested)^{commit}"], outputMode: .capture) == head else {
-            throw ReleaseError("Requested release tag must identify the checked-out commit")
+
+        let newest = try (releaseTags() + reservations() + [predecessor]).max() ?? predecessor
+        version = try newest.next(label)
+        let reservation = "\(reservationNamespace)\(version)"
+        do {
+            try run("git", ["push", "--quiet", "--force-with-lease=\(reservation):", "origin", "\(head):\(reservation)"])
+        } catch {
+            throw ReleaseError("Origin rejected reservation \(reservation) for commit \(head). Run the release workflow again for commit \(head) to allocate the next free version.")
         }
-
-        version = requested
-    } else {
-        var maximum = 0
-        var matched: (suffix: Int, tag: String)?
-        for tag in tags {
-            guard let suffix = ReleaseContext.suffix(tag) else { continue }
-
-            maximum = max(maximum, suffix)
-            if try run("git", ["rev-parse", "\(tag)^{commit}"], outputMode: .capture) == head,
-               suffix > (matched?.suffix ?? -1)
-            {
-                matched = (suffix, tag)
-            }
-        }
-        guard maximum < Int.max else { throw ReleaseError("The release version suffix exceeds the supported range") }
-
-        version = matched?.tag ?? "3.8.0-agoodkind.\(maximum + 1)"
+        source = .newReservation
     }
+    print("Release version \(version) for commit \(head) comes from \(source.rawValue)")
     let root = URL(fileURLWithPath: files.currentDirectoryPath)
     try replace(#"^let PeripheryVersion = ".*"$"#, with: "let PeripheryVersion = \"\(version)\"", in: root.appendingPathComponent("Sources/Frontend/Version.swift"))
     try replace("^VERSION=.*$", with: "VERSION=\(version)", in: root.appendingPathComponent("scripts/install.sh"))
-    try append("version=\(version)\nsource_sha=\(head)\n", to: URL(fileURLWithPath: required("GITHUB_OUTPUT")))
+    try append("release=true\nversion=\(version)\nversion_source=\(source.rawValue)\nsource_sha=\(head)\n", to: output)
     try append("VERSION=\(version)\n", to: URL(fileURLWithPath: required("GITHUB_ENV")))
+}
+
+func collectReleaseInput() async throws {
+    let head = try git(["rev-parse", "HEAD"])
+    let destination = try URL(fileURLWithPath: required("RELEASE_INPUT_PATH"))
+    let github = try GitHub(repository: required("GITHUB_REPOSITORY"), token: environment["GH_TOKEN"])
+    let published = try await github.completeReleases()
+    var commits: [CommitLabels] = []
+    let plan = try releasePlan(head: head, requested: required("REQUESTED_TAG", allowEmpty: true), published: Set(published))
+    if case let .unreleased(_, shas) = plan {
+        for sha in shas {
+            let data = try await github.request("repos/\(github.repository)/commits/\(sha)/pulls")
+            let associated = try JSONDecoder().decode([AssociatedPullRequest].self, from: data)
+            let merged = associated.filter { $0.mergedAt != nil }
+            commits.append(CommitLabels(sha: sha, pullRequests: merged.map {
+                PullRequestLabels(number: $0.number, labels: $0.labels.map(\.name))
+            }))
+        }
+    }
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try encoder.encode(ReleaseInput(publishedReleases: published.sorted(), commits: commits)).write(to: destination, options: .atomic)
+    print("Recorded \(published.count) complete published releases and the pull request labels for \(commits.count) unreleased commits in \(destination.path)")
+}
+
+func checkPullRequestLabels() throws {
+    let number = try required("PULL_REQUEST_NUMBER")
+    guard let parsed = Int(number) else { throw ReleaseError("PULL_REQUEST_NUMBER must be a pull request number") }
+
+    let labels = try JSONDecoder().decode([String].self, from: Data(required("PULL_REQUEST_LABELS").utf8))
+    let label = try PullRequestLabels(number: parsed, labels: labels).releaseLabel()
+    print("PR #\(parsed) uses \(label.rawValue)")
 }
 
 func importCertificate() throws {
@@ -473,6 +743,8 @@ do {
     let command = CommandLine.arguments[1]
     switch command {
     case "prepare": try prepare()
+    case "collect-release-input": try await collectReleaseInput()
+    case "check-pr-labels": try checkPullRequestLabels()
     case "import-certificate": try importCertificate()
     default:
         let github = try GitHub(repository: required("GITHUB_REPOSITORY"), token: environment["GH_TOKEN"])

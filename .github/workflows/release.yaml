@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
   group: periphery-release
@@ -21,6 +22,7 @@ jobs:
   build:
     runs-on: macos-26
     outputs:
+      release: ${{ steps.prepare.outputs.release }}
       version: ${{ steps.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v4
@@ -34,21 +36,30 @@ jobs:
           ref: ${{ github.sha }}
           path: workflow-tools
 
+      - name: Collect published releases and pull request labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          RELEASE_INPUT_PATH: ${{ runner.temp }}/release-input.json
+        run: swift workflow-tools/.github/scripts/release.swift collect-release-input
+
       - name: Prepare release version
         id: prepare
         env:
           SOURCE_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
           REQUESTED_TAG: ${{ inputs.tag }}
+          RELEASE_INPUT_PATH: ${{ runner.temp }}/release-input.json
         run: swift workflow-tools/.github/scripts/release.swift prepare
 
       - name: Check published release
         id: published
+        if: steps.prepare.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: swift workflow-tools/.github/scripts/release.swift check-release
 
       - name: Import signing certificate
-        if: steps.published.outputs.exists != 'true'
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
         env:
           DEVELOPER_ID_APPLICATION_CERTIFICATE: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE }}
           DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
@@ -58,13 +69,13 @@ jobs:
         run: swift workflow-tools/.github/scripts/release.swift import-certificate
 
       - name: Build arm64 executable
-        if: steps.published.outputs.exists != 'true'
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
         env:
           SWIFT_COMMAND: swift
         run: swift workflow-tools/.github/scripts/release.swift build
 
       - name: Sign executable and package artifacts
-        if: steps.published.outputs.exists != 'true'
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
         env:
           ENTITLEMENTS_PATH: release.entitlements
           SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION_SIGNING_IDENTITY }}
@@ -73,7 +84,7 @@ jobs:
         run: swift workflow-tools/.github/scripts/release.swift package
 
       - name: Notarize and staple disk image
-        if: steps.published.outputs.exists != 'true'
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
         env:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
@@ -82,29 +93,44 @@ jobs:
         run: swift workflow-tools/.github/scripts/release.swift notarize
 
       - name: Create checksums
-        if: steps.published.outputs.exists != 'true'
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
         run: swift workflow-tools/.github/scripts/release.swift checksums
 
       - name: Publish release assets
-        if: steps.published.outputs.exists != 'true'
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ steps.prepare.outputs.source_sha }}
+          RELEASE_INPUT_PATH: ${{ runner.temp }}/release-input.json
         run: swift workflow-tools/.github/scripts/release.swift publish
 
       - uses: actions/upload-artifact@v4
-        if: steps.published.outputs.exists != 'true'
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
         with:
           name: periphery-${{ env.VERSION }}
           path: release/*.*
 
+      - uses: actions/upload-artifact@v4
+        if: steps.prepare.outputs.release == 'true'
+        with:
+          name: release-input
+          path: ${{ runner.temp }}/release-input.json
+          overwrite: true
+
   homebrew:
     needs: build
+    if: needs.build.outputs.release == 'true'
     runs-on: macos-26
     env:
       VERSION: ${{ needs.build.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download release input
+        uses: actions/download-artifact@v4
+        with:
+          name: release-input
+          path: ${{ runner.temp }}
 
       - name: Download published archive
         env:
@@ -122,4 +148,5 @@ jobs:
         env:
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           SIGNING_KEY_PATH: ${{ runner.temp }}/homebrew-tap-deploy-key
+          RELEASE_INPUT_PATH: ${{ runner.temp }}/release-input.json
         run: swift .github/scripts/release.swift homebrew
