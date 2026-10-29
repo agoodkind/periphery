@@ -8,7 +8,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "LocalizedStringApp",
-            dependencies: ["InterpolationKeys", "DynamicKeys", "PlainKeys", "PrefixKeys", "OwnerA", "OwnerB"]
+            dependencies: ["InterpolationKeys", "DynamicKeys", "MixedKeys", "PlainKeys", "PrefixKeys", "OwnerA", "OwnerB"]
         ),
         .target(
             name: "InterpolationKeys",
@@ -16,6 +16,10 @@ let package = Package(
         ),
         .target(
             name: "DynamicKeys",
+            resources: [.process("Localizable.xcstrings")]
+        ),
+        .target(
+            name: "MixedKeys",
             resources: [.process("Localizable.xcstrings")]
         ),
         .target(

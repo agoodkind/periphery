@@ -31,6 +31,17 @@
             assertReferenced(.localizedString("dynamic_unreferenced_key"))
         }
 
+        func testRetainsEveryKeyOfModuleWithMixedLiteralAndRuntimeKey() {
+            assertReferenced(.localizedString("mixed_known_key"))
+            assertReferenced(.localizedString("mixed_runtime_key"))
+            assertReferenced(.localizedString("mixed_unreferenced_key"))
+        }
+
+        func testRetainsBothLiteralBranchesOfTernaryKey() {
+            assertReferenced(.localizedString("plain_ternary_first_key"))
+            assertReferenced(.localizedString("plain_ternary_second_key"))
+        }
+
         func testReportsUnusedPlainKey() {
             assertReferenced(.localizedString("plain_used_key"))
             assertNotReferenced(.localizedString("plain_unused_key"))

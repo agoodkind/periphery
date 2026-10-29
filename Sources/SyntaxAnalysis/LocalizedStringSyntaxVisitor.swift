@@ -180,12 +180,39 @@ public final class LocalizedStringSyntaxVisitor: PeripherySyntaxVisitor {
             return nil
         }
 
-        if let stringLiteral = keyExpression.as(StringLiteralExprSyntax.self) {
-            let isInterpolated = Self.interpolatedTextSegments(of: stringLiteral) != nil
-            return isInterpolated && !acceptsKeyFormat ? keyExpression : nil
+        return resolvesToLiteralKeys(keyExpression, acceptsKeyFormat: acceptsKeyFormat) ? nil : keyExpression
+    }
+
+    /// Returns `true` only when every possible value is a string literal key.
+    /// A ternary resolves only when both branches resolve.
+    private func resolvesToLiteralKeys(_ expression: ExprSyntax, acceptsKeyFormat: Bool) -> Bool {
+        if let stringLiteral = expression.as(StringLiteralExprSyntax.self) {
+            return acceptsKeyFormat || Self.interpolatedTextSegments(of: stringLiteral) == nil
         }
 
-        return literalKeys(in: keyExpression).isEmpty ? keyExpression : nil
+        if let tuple = expression.as(TupleExprSyntax.self), tuple.elements.count == 1, let element = tuple.elements.first {
+            return resolvesToLiteralKeys(element.expression, acceptsKeyFormat: acceptsKeyFormat)
+        }
+
+        if let ternary = expression.as(TernaryExprSyntax.self) {
+            return resolvesToLiteralKeys(ternary.thenExpression, acceptsKeyFormat: acceptsKeyFormat)
+                && resolvesToLiteralKeys(ternary.elseExpression, acceptsKeyFormat: acceptsKeyFormat)
+        }
+
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            let elements = Array(sequence.elements)
+            guard let ternaryIndex = elements.firstIndex(where: { $0.is(UnresolvedTernaryExprSyntax.self) }),
+                  let ternary = elements[ternaryIndex].as(UnresolvedTernaryExprSyntax.self)
+            else { return false }
+
+            let elseElements = elements[(ternaryIndex + 1)...]
+            guard elseElements.count == 1, let elseExpression = elseElements.first else { return false }
+
+            return resolvesToLiteralKeys(ternary.thenExpression, acceptsKeyFormat: acceptsKeyFormat)
+                && resolvesToLiteralKeys(elseExpression, acceptsKeyFormat: acceptsKeyFormat)
+        }
+
+        return false
     }
 
     /// The function returns the text before a string literal's first interpolation or the left string literal of a
@@ -290,11 +317,7 @@ public final class LocalizedStringSyntaxVisitor: PeripherySyntaxVisitor {
     }
 
     private func insertLiteral(_ expression: ExprSyntax) {
-        if let stringLiteral = expression.as(StringLiteralExprSyntax.self),
-           let key = stringLiteral.representedLiteralValue
-        {
-            usedStringKeys.insert(key)
-        }
+        usedStringKeys.formUnion(literalKeys(in: expression))
     }
 
     /// Static string literals that an expression may evaluate to, looking through parentheses, ternaries and
