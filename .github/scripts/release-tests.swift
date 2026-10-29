@@ -409,6 +409,56 @@ func testIncompletePublicationPredecessor(_ release: URL, formula: Data) throws 
     try tap.expectFormula(fixture, version: "3.9.0-agoodkind.1", digest: digest)
 }
 
+func markedCommit(_ checkout: Checkout) throws -> String {
+    try "1\n".write(to: checkout.directory.appendingPathComponent(".release-source-policy"), atomically: true, encoding: .utf8)
+    try "module(\n    name = \"periphery\",\n    version = \"3.8.0\",\n)\n".write(to: checkout.directory.appendingPathComponent("MODULE.bazel"), atomically: true, encoding: .utf8)
+    try checkout.git(["add", ".release-source-policy", "MODULE.bazel"])
+    return try checkout.commit("Merge pull request 401")
+}
+
+func testMarkedPredecessor(_ release: URL, complete: Bool) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    let legacy = "3.8.0-agoodkind.1"
+    let marked = "3.9.0-agoodkind.1"
+    try checkout.tag(legacy)
+    let markedSHA = try markedCommit(checkout)
+    try checkout.tag(marked)
+    let head = try checkout.commit("Merge pull request 402")
+    var published = [legacy]
+    var entries = [entry(markedSHA, 401, ["release:minor"]), entry(head, 402, ["release:patch"])]
+    var expected = "3.10.0-agoodkind.1"
+    if complete {
+        published.append(marked)
+        entries = [entry(head, 402, ["release:patch"])]
+        expected = "3.9.1-agoodkind.1"
+    }
+    let result = try fixture.prepare(checkout, published: published, labels: entries)
+    try expectAllocation(result, checkout, version: expected, at: head)
+}
+
+func testMarkedTaggedRetry(_ release: URL) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    let legacy = "3.8.0-agoodkind.1"
+    let marked = "3.9.0-agoodkind.1"
+    try checkout.tag(legacy)
+    let source = try markedCommit(checkout)
+    try checkout.tag(marked)
+    let retry = try fixture.retryCheckout("marked-retry", at: source)
+    let result = try fixture.prepare(retry, published: [legacy])
+    try expect(result.status == 0, "the marked tag retry failed:\n\(result.output)")
+    try expect(result.values["version"] == marked, "the marked retry must reuse its existing tag")
+    try expect(result.values["version_source"] == "incomplete-publication", "the marked retry must report incomplete publication")
+    let variables = ["VERSION": marked, "GITHUB_REPOSITORY": publishedRepository, "SOURCE_SHA": source]
+    try run(release.path, ["source-archive"], at: retry.directory, environment: variables)
+    let archive = retry.directory.appendingPathComponent("release/periphery-\(marked)-source.tar.gz")
+    let initial = try Data(contentsOf: archive)
+    try run(release.path, ["source-archive"], at: retry.directory, environment: variables)
+    try expect(try Data(contentsOf: archive) == initial, "marked retries must recreate the same source archive")
+    try expect(try retry.remoteRefs("refs/tags/\(marked)")["refs/tags/\(marked)"] == source, "retry must preserve the tagged commit")
+}
+
 struct HomebrewTap {
     let origin: URL
     let privateKey: String
@@ -655,6 +705,9 @@ do {
         ("retry after tagged upload failure", { try testRetryAfterTaggedUploadFailure(release) }),
         ("retry after published release", { try testRetryAfterPublishedRelease(release) }),
         ("incomplete publication is not a predecessor", { try testIncompletePublicationPredecessor(release, formula: formula) }),
+        ("incomplete marked tag is not a predecessor", { try testMarkedPredecessor(release, complete: false) }),
+        ("complete marked tag is a predecessor", { try testMarkedPredecessor(release, complete: true) }),
+        ("marked tagged retry", { try testMarkedTaggedRetry(release) }),
         ("older reservation retry", { try testOlderReservationRetry(release, formula: formula) }),
         ("pull request label check", { try testPullRequestLabelCheck(release) }),
         ("Homebrew signed publication", { try testHomebrewSigning(release, formula: formula) }),
