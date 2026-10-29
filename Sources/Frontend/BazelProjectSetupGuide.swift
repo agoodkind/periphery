@@ -28,14 +28,19 @@ final class BazelProjectSetupGuide: SetupGuideHelpers, SetupGuide {
             tag = PeripheryVersion
         }
 
-        let escapedTag = tag.unicodeScalars.map { scalar in
-            switch scalar.value {
-            case 34: return "\\\""
-            case 92: return "\\\\"
-            case 0...31, 127: return String(format: "\\x%02x", scalar.value)
-            default: return String(scalar)
-            }
-        }.joined()
+        guard !tag.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 || $0.value == 92 }) else {
+            throw PeripheryError.usageError("Invalid fork release tag: Git tag names cannot contain control characters or backslashes.")
+        }
+        let validation = Process()
+        validation.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        validation.arguments = ["git", "check-ref-format", "refs/tags/\(tag)"]
+        try validation.run()
+        validation.waitUntilExit()
+        guard validation.terminationStatus == 0 else {
+            throw PeripheryError.usageError("Invalid fork release tag: Git tag names must use valid ref syntax.")
+        }
+
+        let escapedTag = tag.replacingOccurrences(of: "\"", with: "\\\"")
         print(logger.colorize("\nAdd the following snippet to your MODULE.bazel file:", .bold))
         print(logger.colorize("""
         bazel_dep(name = "periphery", version = "3.8.0")
