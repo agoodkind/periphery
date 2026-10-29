@@ -1,0 +1,23 @@
+load("@rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+swift_library(
+    name = "private_helper",
+    srcs = glob(["Private/*.swift"]),
+    module_name = "PrivateHelper",
+)
+
+swift_library(
+    name = "app_sources",
+    srcs = glob(["Sources/*.swift"]),
+    private_deps = [":private_helper"],
+)
+
+macos_application(
+    name = "app",
+    bundle_id = "io.goodkind.periphery.fixture",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "13.0",
+    resources = ["Localizable.xcstrings"],
+    deps = [":app_sources"],
+)
