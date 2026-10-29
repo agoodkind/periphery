@@ -446,12 +446,14 @@ final class RetentionTest: FixtureSourceGraphTestCase {
         }
     }
 
-    /// Assigning the backing storage (`_foo = State(wrappedValue:)`) under Xcode 27 `@State` still retains `foo`,
-    /// so there is no false negative for the explicit-initializer pattern. Pinned to detect toolchain changes.
-    func testRetainsMacroStatePropertyInitializedViaBackingStorage() {
+    /// The test checks that Periphery reports `FixtureStruct231.assignedViaBacking` as unused when `init` only assigns
+    /// `_assignedViaBacking` and the fixture never reads the property.
+    /// `SwiftUIRetainer` adds a reference to the `@State` property only for explicit reads of `$name` or `_name`.
+    /// The assignment `_assignedViaBacking = State(wrappedValue: flag)` counts as a write.
+    func testReportsMacroStatePropertyInitializedOnlyViaBackingStorage() {
         analyze(retainPublic: true) {
             assertReferenced(.struct("FixtureStruct231")) {
-                self.assertReferenced(.varInstance("assignedViaBacking"))
+                self.assertNotReferenced(.varInstance("assignedViaBacking"))
             }
         }
     }

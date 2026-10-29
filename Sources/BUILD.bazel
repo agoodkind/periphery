@@ -78,7 +78,6 @@ swift_library(
         "SourceGraph/Mutators/GenericClassAndStructConstructorReferenceBuilder.swift",
         "SourceGraph/Mutators/InheritedImplicitInitializerReferenceBuilder.swift",
         "SourceGraph/Mutators/InterfaceBuilderPropertyRetainer.swift",
-        "SourceGraph/Mutators/MacroWrappedPropertyReferenceBuilder.swift",
         "SourceGraph/Mutators/LocalizedStringRetainer.swift",
         "SourceGraph/Mutators/ObjCAccessibleRetainer.swift",
         "SourceGraph/Mutators/PlatformConditionalRetainer.swift",
