@@ -209,6 +209,7 @@ final class SwiftIndexer: Indexer {
                         }
 
                         if collectCalleeUsrs, occurrence.roles.contains(.reference),
+                           !occurrence.roles.contains(.implicit),
                            Self.calleeSymbolKinds.contains(occurrence.symbol.kind)
                         {
                             let position = LocalizedStringCalleePosition(line: location.line, column: location.column)
