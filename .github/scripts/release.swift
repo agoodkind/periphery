@@ -28,6 +28,7 @@ enum ProcessOutput {
     case inherit
     case capture
     case captureWithError
+    case file(URL)
 }
 
 @discardableResult
@@ -39,20 +40,31 @@ func run(_ executable: String, _ arguments: [String], at directory: URL? = nil,
     process.arguments = [executable] + arguments
     process.environment = environment.merging(extraEnvironment) { _, new in new }
     process.currentDirectoryURL = directory
-    let output = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    var capturedOutput: URL?
+    let output: URL?
+    switch outputMode {
+    case .inherit:
+        output = nil
+    case .capture, .captureWithError:
+        let temporary = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        output = temporary
+        capturedOutput = temporary
+    case let .file(destination):
+        output = destination
+    }
     var handle: FileHandle?
-    if outputMode != .inherit {
+    if let output {
         guard files.createFile(atPath: output.path, contents: nil) else {
-            throw ReleaseError("Cannot create the command output file")
+            throw ReleaseError("Cannot create command output file \(output.path)")
         }
 
         handle = try FileHandle(forWritingTo: output)
         process.standardOutput = handle
-        if outputMode == .captureWithError { process.standardError = handle }
+        if case .captureWithError = outputMode { process.standardError = handle }
     }
     defer {
         try? handle?.close()
-        if outputMode != .inherit { try? files.removeItem(at: output) }
+        if let capturedOutput { try? files.removeItem(at: capturedOutput) }
     }
     try process.run()
     process.waitUntilExit()
@@ -60,8 +72,8 @@ func run(_ executable: String, _ arguments: [String], at directory: URL? = nil,
         throw ReleaseError("\(executable) failed with status \(process.terminationStatus)")
     }
 
-    if outputMode != .inherit {
-        return try String(contentsOf: output, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+    if let capturedOutput {
+        return try String(contentsOf: capturedOutput, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     return ""
 }
@@ -377,23 +389,6 @@ func git(_ arguments: [String]) throws -> String {
     try run("git", arguments, outputMode: .capture)
 }
 
-func gitBlob(_ revision: String, path: String, to destination: URL) throws {
-    guard files.createFile(atPath: destination.path, contents: nil) else {
-        throw ReleaseError("Cannot create \(destination.path)")
-    }
-    let handle = try FileHandle(forWritingTo: destination)
-    defer { try? handle.close() }
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = ["git", "show", "\(revision):\(path)"]
-    process.standardOutput = handle
-    try process.run()
-    process.waitUntilExit()
-    guard process.terminationReason == .exit, process.terminationStatus == 0 else {
-        throw ReleaseError("Cannot read \(path) from \(revision)")
-    }
-}
-
 func lines(_ text: String) -> [String] {
     text.split(separator: "\n").map(String.init)
 }
@@ -433,12 +428,18 @@ func sourceArchiveRequired(at revision: String) throws -> Bool {
 }
 
 func completeReleaseTags(_ releases: [GitHubRelease]) throws -> [String] {
-    try releases.filter { release in
-        guard !release.isDraft, try ReleaseVersion.parse(release.tagName) != nil else { return false }
-        let names = Set(release.assets.map(\.name))
-        let required = try ReleaseContext.assetNames(release.tagName, sourceArchive: sourceArchiveRequired(at: release.tagName))
-        return required.allSatisfy(names.contains)
-    }.map(\.tagName)
+    let candidates = try releases.filter { release in
+        guard !release.isDraft else { return false }
+        return try ReleaseVersion.parse(release.tagName) != nil
+    }
+    let requirements = try candidates.map { release in
+        let sourceArchive = try sourceArchiveRequired(at: release.tagName)
+        return (release: release, required: ReleaseContext.assetNames(release.tagName, sourceArchive: sourceArchive))
+    }
+    return requirements.filter { entry in
+        let names = Set(entry.release.assets.map(\.name))
+        return entry.required.allSatisfy(names.contains)
+    }.map { $0.release.tagName }
 }
 
 func releasePlan(head: String, requested: String, published: Set<String>) throws -> ReleasePlan {
@@ -546,36 +547,28 @@ struct ReleaseContext {
     }
 
     func build() throws {
-        let sourceRequired = try sourceArchiveRequired(at: "HEAD")
-        var temporary: URL?
-        var source = root
-        if sourceRequired {
-            let extraction = files.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-            try files.createDirectory(at: extraction, withIntermediateDirectories: true)
-            temporary = extraction
-            source = extraction.appendingPathComponent("periphery-\(version)", isDirectory: true)
+        guard try sourceArchiveRequired(at: "HEAD") else {
+            try build(at: root)
+            return
         }
-        var failure: Error?
-        do {
-            if let temporary {
-                try run("tar", ["-xzf", directory.appendingPathComponent("periphery-\(version)-source.tar.gz").path, "-C", temporary.path])
-            }
+        let extraction = files.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try files.createDirectory(at: extraction, withIntermediateDirectories: true)
+        let source = extraction.appendingPathComponent("periphery-\(version)", isDirectory: true)
+        let archive = directory.appendingPathComponent("periphery-\(version)-source.tar.gz")
+        let outcome = Result<Void, Error> {
+            try run("tar", ["-xzf", archive.path, "-C", extraction.path])
             try build(at: source)
-            if sourceRequired { try verifyBazel(at: source) }
+            try verifyBazel(at: source)
+        }
+        do {
+            try files.removeItem(at: extraction)
         } catch {
-            failure = error
-        }
-        if let temporary {
-            do {
-                try files.removeItem(at: temporary)
-            } catch {
-                if let failure {
-                    throw ReleaseError("\(failure); cannot remove source extraction \(temporary.path): \(error)")
-                }
-                throw ReleaseError("Cannot remove source extraction \(temporary.path): \(error)")
+            if case let .failure(failure) = outcome {
+                throw ReleaseError("\(failure); cannot remove source extraction \(extraction.path): \(error)")
             }
+            throw ReleaseError("Cannot remove source extraction \(extraction.path): \(error)")
         }
-        if let failure { throw failure }
+        try outcome.get()
     }
 
     func build(at source: URL) throws {
@@ -663,7 +656,7 @@ struct ReleaseContext {
             ("MODULE.bazel", "100644", #"^    version = ".*",$"#, "    version = \"\(version)\","),
         ] {
             let input = temporary.appendingPathComponent(UUID().uuidString)
-            try gitBlob(source, path: path, to: input)
+            try run("git", ["show", "\(source):\(path)"], outputMode: .file(input))
             try replace(pattern, with: replacement, in: input)
             let hash = try run("git", ["hash-object", "-w", input.path], outputMode: .capture)
             try run("git", ["update-index", "--add", "--cacheinfo", "\(mode),\(hash),\(path)"], extraEnvironment: indexEnvironment)

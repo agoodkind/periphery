@@ -622,6 +622,14 @@ func testSourceArchive(_ release: URL) throws {
     let missing = try execute(release.path, ["publish"], at: checkout.directory, environment: markedVariables)
     try expect(missing.status != 0 && missing.output.contains("Release asset periphery-\(version)-source.tar.gz does not exist"), "Publication must reject a missing source archive")
     try expect(try checkout.remoteRefs("refs/tags/\(version)").isEmpty, "Publication must reject missing assets before pushing a tag")
+    let temporary = fixture.root.appendingPathComponent("build-temporary", isDirectory: true)
+    try files.createDirectory(at: temporary, withIntermediateDirectories: true)
+    var buildVariables = markedVariables
+    buildVariables["TMPDIR"] = temporary.path + "/"
+    buildVariables["SWIFT_COMMAND"] = "swift"
+    let failedBuild = try execute(release.path, ["build"], at: checkout.directory, environment: buildVariables)
+    try expect(failedBuild.status != 0 && failedBuild.output.contains("tar failed"), "Build must report a missing source archive")
+    try expect(try files.contentsOfDirectory(atPath: temporary.path).isEmpty, "Build must remove its extraction after a failed archive extraction")
     try files.removeItem(at: releaseDirectory.appendingPathComponent("install.sh"))
     try run(release.path, ["source-archive"], at: checkout.directory, environment: markedVariables)
     let archive = checkout.directory.appendingPathComponent("release/periphery-\(version)-source.tar.gz")
