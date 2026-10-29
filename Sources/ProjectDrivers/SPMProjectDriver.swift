@@ -119,6 +119,9 @@ extension SPMProjectDriver: ProjectDriver {
             let globbedFiles = FilePath.glob("\(targetPath.string)/**/*.\(ext)")
 
             for file in globbedFiles where !nestedTargetPaths.contains(where: { file.starts(with: $0) }) {
+                let relativeComponents = file.components.dropFirst(targetPath.components.count)
+                guard !relativeComponents.contains(where: { $0.string.hasPrefix(".") }) else { continue }
+
                 if !isInsideNestedProject(file, under: targetPath, cache: &nestedProjectDirectories) {
                     files.insert(file)
                 }

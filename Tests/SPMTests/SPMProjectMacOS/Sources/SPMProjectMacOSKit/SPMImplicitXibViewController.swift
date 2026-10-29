@@ -17,6 +17,8 @@ public final class SPMImplicitXibViewController: NSViewController {
 
     @IBAction private func unusedPrivateAction(_: Any) {}
 
+    @IBAction private func hiddenOnlyAction(_: Any) {}
+
     @IBInspectable private var unusedPrivateInspectable: CGFloat = 0
 }
 
