@@ -1,3 +1,4 @@
+load("@rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 
@@ -20,4 +21,18 @@ macos_application(
     minimum_os_version = "13.0",
     resources = ["Localizable.xcstrings"],
     deps = [":app_sources"],
+)
+
+swift_library(
+    name = "ios_sources",
+    srcs = glob(["IOS/*.swift"]),
+)
+
+ios_application(
+    name = "ios_app",
+    bundle_id = "io.goodkind.periphery.iosfixture",
+    families = ["iphone", "ipad"],
+    infoplists = ["Info-iOS.plist"],
+    minimum_os_version = "17.0",
+    deps = [":ios_sources"],
 )

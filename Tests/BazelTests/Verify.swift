@@ -162,11 +162,11 @@ do {
             catalog: nil
         ),
         Fixture(
-            name: "the macOS application",
+            name: "the macOS and iOS applications",
             source: repository.appendingPathComponent("Tests/BazelAppleTests/Fixture"),
-            files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Private", "Info.plist", "Localizable.xcstrings"],
-            unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift"],
-            expectedNames: ["unusedGreeting()", "unusedPrivateGreeting()"],
+            files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Private", "IOS", "Info.plist", "Info-iOS.plist", "Localizable.xcstrings"],
+            unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift", "IOS/Unused.swift"],
+            expectedNames: ["unusedGreeting()", "unusedIOSGreeting()", "unusedPrivateGreeting()"],
             catalog: "Localizable.xcstrings"
         ),
     ]
