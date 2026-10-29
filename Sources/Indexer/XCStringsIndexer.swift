@@ -1,4 +1,5 @@
 import Configuration
+import FilenameMatcher
 import Logger
 import Shared
 import SourceGraph
@@ -12,17 +13,27 @@ final class XCStringsIndexer: Indexer {
     private let files: Set<FilePath>
     private let graph: SourceGraphMutex
     private let logger: ContextualLogger
+    private let configuration: Configuration
 
     required init(files: Set<FilePath>, graph: SourceGraphMutex, logger: ContextualLogger, configuration: Configuration) {
         self.files = files
         self.graph = graph
         self.logger = logger.contextualized(with: "xcstrings")
+        self.configuration = configuration
         super.init(configuration: configuration)
     }
 
     func perform() throws {
-        let (includedFiles, excludedFiles) = filterIndexExcluded(from: files)
+        let (indexedFiles, excludedFiles) = filterIndexExcluded(from: files)
         excludedFiles.forEach { self.logger.debug("Excluding \($0.string)") }
+
+        let catalogMatchers = configuration.localizedStringCatalogExcludeMatchers
+        let includedFiles = indexedFiles.filter { path in
+            guard catalogMatchers.anyMatch(filename: path.string) else { return true }
+
+            self.logger.debug("Excluding catalog \(path.string)")
+            return false
+        }
 
         try JobPool(jobs: Array(includedFiles)).forEach { [weak self] path in
             guard let self else { return }
