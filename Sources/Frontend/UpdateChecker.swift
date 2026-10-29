@@ -79,7 +79,8 @@ final class UpdateChecker {
 
         debugLogger.debug("latest: \(latestVersion)")
 
-        guard latestVersion.isReleaseNewer(than: PeripheryVersion) else { return }
+        guard PeripheryVersion != "development" else { return }
+        guard latestVersion.isVersion(greaterThan: PeripheryVersion) else { return }
 
         logger.info(logger.colorize("\nUpdate Available!", .boldGreen))
         let boldLatestVersion = logger.colorize(latestVersion, .bold)

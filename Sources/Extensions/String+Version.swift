@@ -36,12 +36,6 @@ public extension VersionString {
         compare(toVersion: targetVersion) == .orderedDescending
     }
 
-    func isReleaseNewer(than currentVersion: String) -> Bool {
-        guard currentVersion != "development" else { return false }
-
-        return isVersion(greaterThan: currentVersion)
-    }
-
     func isVersion(greaterThanOrEqualTo targetVersion: String) -> Bool {
         compare(toVersion: targetVersion) != .orderedAscending
     }
