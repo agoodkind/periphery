@@ -69,6 +69,12 @@ public final class PlatformConditionalNameCollector: SyntaxVisitor {
     private func isReference(_ token: TokenSyntax) -> Bool {
         guard let parent = token.parent else { return false }
 
+        if let extensionDeclaration = parent.parent?.as(ExtensionDeclSyntax.self),
+           extensionDeclaration.extendedType.id == parent.id
+        {
+            return false
+        }
+
         return parent.is(DeclReferenceExprSyntax.self)
             || parent.is(IdentifierTypeSyntax.self)
             || parent.is(MemberTypeSyntax.self)

@@ -83,6 +83,7 @@ swift_library(
         "SourceGraph/Mutators/ObjCAccessibleRetainer.swift",
         "SourceGraph/Mutators/PlatformConditionalRetainer.swift",
         "SourceGraph/Mutators/PropertyWrapperRetainer.swift",
+        "SourceGraph/Mutators/ProtobufAPIVersionCheckRetainer.swift",
         "SourceGraph/Mutators/ProtocolConformanceReferenceBuilder.swift",
         "SourceGraph/Mutators/ProtocolExtensionReferenceBuilder.swift",
         "SourceGraph/Mutators/PubliclyAccessibleRetainer.swift",
