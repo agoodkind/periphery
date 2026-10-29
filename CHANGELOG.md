@@ -12,6 +12,21 @@
 
 - None.
 
+## 3.10.0 (2026-10-29)
+
+##### Breaking
+
+- None.
+
+##### Enhancements
+
+- String Catalog key usage is now detected from the type of the receiving parameter (`LocalizedStringKey`, `LocalizedStringResource`, `String.LocalizationValue`, `DisplayRepresentation`, `IntentDescription`), covering `Button`, `Label`, `Toggle`, `Section`, `.navigationTitle`, `Text` and custom initializers, plus annotated declarations (`static let x: LocalizedStringResource = "…"`). Closes #58.
+- New `localized_string_catalog_exclude` option (globs) to skip catalogues from the unused-key analysis; `**/InfoPlist.xcstrings` and `**/AppShortcuts.xcstrings` are excluded by default. Interpolated and dynamic keys are documented as a known limitation in the README. Closes #58.
+
+##### Bug Fixes
+
+- None.
+
 ## 3.9.0 (2026-10-28)
 
 ##### Breaking
