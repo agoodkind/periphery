@@ -52,7 +52,7 @@ final class Project {
         switch kind {
         case let .xcode(projectPath):
             #if canImport(XcodeSupport)
-                return try XcodeProjectDriver(
+                try XcodeProjectDriver(
                     projectPath: projectPath,
                     configuration: configuration,
                     shell: shell,
@@ -62,15 +62,15 @@ final class Project {
                 fatalError("Xcode projects are not supported on this platform.")
             #endif
         case .spm:
-            return try SPMProjectDriver(configuration: configuration, shell: shell, logger: logger)
+            try SPMProjectDriver(configuration: configuration, shell: shell, logger: logger)
         case .bazel:
-            return BazelProjectDriver(
+            BazelProjectDriver(
                 configuration: configuration,
                 shell: shell,
                 logger: logger
             )
         case let .generic(genericProjectConfig):
-            return try GenericProjectDriver(
+            try GenericProjectDriver(
                 genericProjectConfig: genericProjectConfig,
                 configuration: configuration
             )

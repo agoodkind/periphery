@@ -1,0 +1,23 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "plain_closure_key" : {},
+    "plain_comment_not_key" : {},
+    "plain_function_type_title_key" : {},
+    "plain_generic_not_key" : {},
+    "plain_objc_callee_key" : {},
+    "plain_private_function_key" : {},
+    "plain_text_with_comment_key" : {},
+    "plain_unused_key" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unused" } }
+      }
+    },
+    "plain_used_key" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Used" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

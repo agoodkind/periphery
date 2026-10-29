@@ -74,6 +74,9 @@ targets.append(contentsOf: [
         name: "ObjcAnnotatedRetentionFixtures"
     ),
     .target(
+        name: "SwiftUIRetentionFixtures"
+    ),
+    .target(
         name: "AppIntentsRetentionFixtures"
     )
 ])

@@ -22,6 +22,7 @@ public protocol PeripherySyntaxVisitor {
     func visit(_ node: VariableDeclSyntax)
     func visit(_ node: TypeAliasDeclSyntax)
     func visit(_ node: AssociatedTypeDeclSyntax)
+    func visit(_ node: MacroDeclSyntax)
     func visit(_ node: OperatorDeclSyntax)
     func visit(_ node: PrecedenceGroupDeclSyntax)
     func visit(_ node: ImportDeclSyntax)
@@ -42,6 +43,7 @@ public protocol PeripherySyntaxVisitor {
     func visitPost(_ node: VariableDeclSyntax)
     func visitPost(_ node: TypeAliasDeclSyntax)
     func visitPost(_ node: AssociatedTypeDeclSyntax)
+    func visitPost(_ node: MacroDeclSyntax)
     func visitPost(_ node: OperatorDeclSyntax)
     func visitPost(_ node: PrecedenceGroupDeclSyntax)
     func visitPost(_ node: ImportDeclSyntax)
@@ -64,6 +66,7 @@ public extension PeripherySyntaxVisitor {
     func visit(_: VariableDeclSyntax) {}
     func visit(_: TypeAliasDeclSyntax) {}
     func visit(_: AssociatedTypeDeclSyntax) {}
+    func visit(_: MacroDeclSyntax) {}
     func visit(_: OperatorDeclSyntax) {}
     func visit(_: PrecedenceGroupDeclSyntax) {}
     func visit(_: ImportDeclSyntax) {}
@@ -84,6 +87,7 @@ public extension PeripherySyntaxVisitor {
     func visitPost(_: VariableDeclSyntax) {}
     func visitPost(_: TypeAliasDeclSyntax) {}
     func visitPost(_: AssociatedTypeDeclSyntax) {}
+    func visitPost(_: MacroDeclSyntax) {}
     func visitPost(_: OperatorDeclSyntax) {}
     func visitPost(_: PrecedenceGroupDeclSyntax) {}
     func visitPost(_: ImportDeclSyntax) {}
@@ -194,6 +198,11 @@ public final class MultiplexingSyntaxVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
+    override public func visit(_ node: MacroDeclSyntax) -> SyntaxVisitorContinueKind {
+        visitors.forEach { $0.visit(node) }
+        return .visitChildren
+    }
+
     override public func visit(_ node: OperatorDeclSyntax) -> SyntaxVisitorContinueKind {
         visitors.forEach { $0.visit(node) }
         return .visitChildren
@@ -272,6 +281,10 @@ public final class MultiplexingSyntaxVisitor: SyntaxVisitor {
     }
 
     override public func visitPost(_ node: AssociatedTypeDeclSyntax) {
+        visitors.forEach { $0.visitPost(node) }
+    }
+
+    override public func visitPost(_ node: MacroDeclSyntax) {
         visitors.forEach { $0.visitPost(node) }
     }
 

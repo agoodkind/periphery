@@ -153,7 +153,9 @@ final class PlanSuggester {
         for char in text {
             if inEscape {
                 current.append(char)
-                if char == "m" { inEscape = false }
+                if char == "m" {
+                    inEscape = false
+                }
             } else if char == "\u{001B}" {
                 current.append(char)
                 inEscape = true
@@ -166,7 +168,9 @@ final class PlanSuggester {
                 current.append(char)
             }
         }
-        if !current.isEmpty { words.append(current) }
+        if !current.isEmpty {
+            words.append(current)
+        }
 
         // Build lines by adding words until width exceeds max.
         var lines: [String] = []
@@ -187,7 +191,9 @@ final class PlanSuggester {
                 currentWidth = wordWidth
             }
         }
-        if !currentLine.isEmpty { lines.append(currentLine) }
+        if !currentLine.isEmpty {
+            lines.append(currentLine)
+        }
 
         // Re-open/close ANSI styles across line breaks.
         var result: [String] = []

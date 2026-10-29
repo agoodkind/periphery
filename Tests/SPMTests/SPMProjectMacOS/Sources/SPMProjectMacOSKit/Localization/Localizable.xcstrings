@@ -1,0 +1,186 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "mac_annotated_property_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_annotated_property_key"
+          }
+        }
+      }
+    },
+    "mac_button_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_button_key"
+          }
+        }
+      }
+    },
+    "mac_custom_init_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_custom_init_key"
+          }
+        }
+      }
+    },
+    "mac_default_value_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_default_value_key"
+          }
+        }
+      }
+    },
+    "mac_label_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_label_key"
+          }
+        }
+      }
+    },
+    "mac_label_system_image_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_label_system_image_key"
+          }
+        }
+      }
+    },
+    "mac_localization_value_param_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_localization_value_param_key"
+          }
+        }
+      }
+    },
+    "mac_navigation_title_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_navigation_title_key"
+          }
+        }
+      }
+    },
+    "mac_plain_string_param_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_plain_string_param_key"
+          }
+        }
+      }
+    },
+    "mac_resource_param_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_resource_param_key"
+          }
+        }
+      }
+    },
+    "mac_returned_resource_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_returned_resource_key"
+          }
+        }
+      }
+    },
+    "mac_section_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_section_key"
+          }
+        }
+      }
+    },
+    "mac_ternary_false_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_ternary_false_key"
+          }
+        }
+      }
+    },
+    "mac_ternary_true_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_ternary_true_key"
+          }
+        }
+      }
+    },
+    "mac_text_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_text_key"
+          }
+        }
+      }
+    },
+    "mac_toggle_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_toggle_key"
+          }
+        }
+      }
+    },
+    "mac_unused_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_unused_key"
+          }
+        }
+      }
+    },
+    "mac_variadic_key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mac_variadic_key"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

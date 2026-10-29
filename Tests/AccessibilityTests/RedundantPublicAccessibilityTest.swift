@@ -313,6 +313,16 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
         }
     }
 
+    func testPublicResultBuilderUsedCrossModule() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.struct("PublicResultBuilder")) {
+            self.assertNotRedundantPublicAccessibility(.functionMethodStatic("buildBlock(_:)"))
+            self.assertNotRedundantPublicAccessibility(.functionMethodStatic("buildExpression(_:)"))
+            self.assertNotRedundantPublicAccessibility(.functionMethodStatic("buildOptional(_:)"))
+        }
+    }
+
     func testPublicInlinableFunction() {
         index()
 
@@ -338,6 +348,37 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
         assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedAsExtensionSameTypeGenericRequirement"))
     }
 
+    func testPublicClassUsedAsExtensionSameTypeGenericRequirement() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.class("PublicClassUsedAsExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.class("PublicClassUsedAsPublicExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.protocol("PublicClassUsedAsExtensionSameTypeGenericRequirement_Protocol"))
+        assertRedundantPublicAccessibility(.class("RedundantPublicClassUsedAsExtensionSameTypeGenericRequirement"))
+        assertNotRedundantPublicAccessibility(.class("PublicTypeUsedAsGenericStructExtensionWhereClause"))
+        assertNotRedundantPublicAccessibility(.class("PublicTypeUsedAsPublicFunctionWhereClause"))
+    }
+
+    func testPublicTypeUsedInPublicGenericTypealias() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.typealias("PublicTypeUsedInPublicGenericTypealias_Alias"))
+        assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedInPublicGenericTypealias_Wrapper"))
+        assertNotRedundantPublicAccessibility(.struct("PublicTypeUsedInPublicGenericTypealias"))
+        assertRedundantPublicAccessibility(.struct("RedundantPublicTypeUsedInInternalTypealias"))
+    }
+
+    /// The conforming type is internal, so the witness only needs to be internal: `public` is redundant even though the
+    /// protocol is public and declared in another module (swiftc accepts the witness without `public`).
+    func testInternalTypeWitnessingCrossModulePublicProtocol() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.protocol("PublicProtocolWithStaticRequirementUsedByExtension"))
+        assertNotRedundantPublicAccessibility(.class("InternalClassWitnessingCrossModuleProtocol")) {
+            self.assertRedundantPublicAccessibility(.varStatic("bundleName"))
+        }
+    }
+
     func testPublicComparableOperatorFunction() {
         index()
 
@@ -349,5 +390,37 @@ final class RedundantPublicAccessibilityTest: SPMSourceGraphTestCase {
         index()
 
         assertNotRedundantPublicAccessibility(.enum("PublicTypeUsedAsPublicFunctionThrowType"))
+    }
+
+    func testPublicMemberInNonPublicExtensionOfNonPublicType() {
+        index()
+
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalTypeExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInPrivateTypeExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInFileprivateTypeExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalProtocolExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInNestedTypeOfInternalTypeExtension()"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalNestedTypeExtension()"))
+        assertRedundantPublicAccessibility(.class("PublicMemberInRedundantPublicTypeExtension"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInRedundantPublicTypeExtension()"))
+    }
+
+    func testPublicMemberInInternalNestedTypeOfPublicType() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.class("PublicMemberInInternalNestedType_Outer"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalNestedType()"))
+        assertNotRedundantPublicAccessibility(.class("PublicMemberInInternalNestedTypeOfExtension_Outer"))
+        assertRedundantPublicAccessibility(.functionMethodInstance("publicFuncInInternalNestedTypeOfExtension()"))
+    }
+
+    func testPublicMemberInNonPublicExtensionOfPublicType() {
+        index()
+
+        assertNotRedundantPublicAccessibility(.class("PublicMemberInNonPublicExtensionOfPublicType"))
+        assertNotRedundantPublicAccessibility(.functionMethodInstance("publicFuncInNonPublicExtensionOfPublicType()"))
+        assertNotRedundantPublicAccessibility(.protocol("PublicMemberInNonPublicExtensionOfPublicProtocol"))
+        assertNotRedundantPublicAccessibility(.functionMethodInstance("publicFuncInNonPublicExtensionOfPublicProtocol()"))
+        assertNotRedundantPublicAccessibility(.functionMethodInstance("publicFuncInExternalTypeExtension()"))
     }
 }
