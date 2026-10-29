@@ -16,6 +16,8 @@
 
             if installedVersion == "development" {
                 XCTAssertTrue(lines.contains("This development build does not have a release version. The latest fork release is \(latestVersion)."), output)
+            } else if installedVersion == latestVersion {
+                XCTAssertTrue(lines.contains("The installed version matches the latest fork release, \(latestVersion)."), output)
             } else {
                 XCTAssertTrue(lines.contains { $0.contains(installedVersion) && $0.contains(latestVersion) }, output)
             }
