@@ -173,13 +173,17 @@ struct GitHub {
         return data
     }
 
+    func releasesPage(_ page: Int) async throws -> [GitHubRelease] {
+        let data = try await request("repos/\(repository)/releases?per_page=100&page=\(page)")
+
+        return try JSONDecoder().decode([GitHubRelease].self, from: data)
+    }
+
     func releases() async throws -> [GitHubRelease] {
         var page = 1
         var all: [GitHubRelease] = []
         while true {
-            let data = try await request("repos/\(repository)/releases?per_page=100&page=\(page)")
-
-            let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
+            let releases = try await releasesPage(page)
             all += releases
             if releases.count < 100 { return all }
             page += 1
@@ -187,7 +191,13 @@ struct GitHub {
     }
 
     func release(_ version: String) async throws -> GitHubRelease? {
-        try await releases().first { $0.tagName == version }
+        var page = 1
+        while true {
+            let releases = try await releasesPage(page)
+            if let release = releases.first(where: { $0.tagName == version }) { return release }
+            if releases.count < 100 { return nil }
+            page += 1
+        }
     }
 
     func send(_ path: String, method: String, value: some Encodable) async throws -> Data {
