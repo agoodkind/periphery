@@ -23,6 +23,7 @@ final class BazelProjectSetupGuide: SetupGuideHelpers, SetupGuide {
             guard let input = readLine()?.trimmingCharacters(in: .whitespacesAndNewlines), !input.isEmpty else {
                 throw PeripheryError.usageError("A published fork release tag is required.")
             }
+
             tag = input
         } else {
             tag = PeripheryVersion
@@ -31,6 +32,7 @@ final class BazelProjectSetupGuide: SetupGuideHelpers, SetupGuide {
         guard !tag.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 || $0.value == 92 }) else {
             throw PeripheryError.usageError("Invalid fork release tag: Git tag names cannot contain control characters or backslashes.")
         }
+
         let validation = Process()
         validation.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         validation.arguments = ["git", "check-ref-format", "refs/tags/\(tag)"]
