@@ -10,6 +10,15 @@ import SystemPackage
 private struct LocalizedStringCalleePosition: Hashable {
     let line: Int
     let column: Int
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.line == rhs.line && lhs.column == rhs.column
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(line)
+        hasher.combine(column)
+    }
 }
 
 public struct IndexUnit {
@@ -340,9 +349,23 @@ final class SwiftIndexer: Indexer {
 
             calleeUsrsByPosition = [:]
 
-            guard !keys.isEmpty else { return }
+            for unresolvedKey in visitor.unresolvedKeys {
+                logger.debug(
+                    "Unresolved localized string key at \(sourceFile.path.string):\(unresolvedKey.line):\(unresolvedKey.column), retaining catalog keys with prefix '\(unresolvedKey.prefix)' in modules \(sourceFile.modules.sorted().joined(separator: ", "))"
+                )
+            }
 
-            graph.withLock { $0.addUsedLocalizedStringKeys(keys) }
+            let formatSegments = visitor.keyFormatSegments
+            let unresolvedPrefixes = Set(visitor.unresolvedKeys.map(\.prefix))
+            let modules = sourceFile.modules
+
+            guard !keys.isEmpty || !formatSegments.isEmpty || !unresolvedPrefixes.isEmpty else { return }
+
+            graph.withLock { graph in
+                graph.addUsedLocalizedStringKeys(keys)
+                graph.addLocalizedStringKeyFormats(formatSegments)
+                graph.addUnresolvedLocalizedStringKeyPrefixes(unresolvedPrefixes, modules: modules)
+            }
         }
 
         private func establishDeclarationHierarchy() {

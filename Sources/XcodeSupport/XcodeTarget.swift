@@ -8,6 +8,7 @@ public final class XcodeTarget {
 
     private let target: PBXTarget
     private var files: [ProjectFileKind: Set<FilePath>] = [:]
+    public private(set) var swiftSourceFiles: Set<FilePath> = []
 
     required init(project: XcodeProject, target: PBXTarget) {
         self.project = project
@@ -23,10 +24,15 @@ public final class XcodeTarget {
     }
 
     public func identifyFiles() throws {
-        try identifyFiles(in: synchronizedGroupFiles())
+        let synchronizedFiles = try synchronizedGroupFiles()
+        try identifyFiles(in: synchronizedFiles)
 
         let sourcesBuildPhases = project.xcodeProject.pbxproj.sourcesBuildPhases
         let resourcesBuildPhases = project.xcodeProject.pbxproj.resourcesBuildPhases
+
+        swiftSourceFiles = try synchronizedFiles.filter { $0.extension == "swift" }
+            .union(filePaths(in: sourcesBuildPhases).filter { $0.extension == "swift" })
+            .mapSet { $0.lexicallyNormalized() }
 
         try identifyFiles(kind: .xcDataModel, in: sourcesBuildPhases)
         try identifyFiles(kind: .xcMappingModel, in: sourcesBuildPhases)
@@ -63,22 +69,23 @@ public final class XcodeTarget {
     }
 
     private func identifyFiles(kind: ProjectFileKind, in buildPhases: [PBXBuildPhase]) throws {
+        let foundFiles = try filePaths(in: buildPhases).filter { path in
+            guard let ext = path.extension else { return false }
+
+            return kind.extensions.contains(ext.lowercased())
+        }
+        files[kind, default: []].formUnion(foundFiles)
+    }
+
+    private func filePaths(in buildPhases: [PBXBuildPhase]) throws -> Set<FilePath> {
         let targetPhases = buildPhases.filter { target.buildPhases.contains($0) }
         let sourceRoot = project.sourceRoot.lexicallyNormalized()
 
-        let foundFiles = try targetPhases.flatMapSet {
+        return try targetPhases.flatMapSet {
             try ($0.files ?? []).compactMapSet {
-                if let stringPath = try $0.file?.fullPath(sourceRoot: sourceRoot.string) {
-                    let path = FilePath(stringPath)
-                    if let ext = path.extension, kind.extensions.contains(ext.lowercased()) {
-                        return path
-                    }
-                }
-
-                return nil
+                try $0.file?.fullPath(sourceRoot: sourceRoot.string).map { FilePath($0) }
             }
         }
-        files[kind, default: []].formUnion(foundFiles)
     }
 
     private func identifyFiles(in paths: Set<FilePath>) throws {

@@ -3,11 +3,11 @@ import SyntaxAnalysis
 
 @_silgen_name("swift_demangle")
 private func swiftDemangle(
-    _ mangledName: UnsafePointer<CChar>?,
-    _ mangledNameLength: Int,
-    _ outputBuffer: UnsafeMutablePointer<CChar>?,
-    _ outputBufferSize: UnsafeMutablePointer<Int>?,
-    _ flags: UInt32
+    _: UnsafePointer<CChar>?,
+    _: Int,
+    _: UnsafeMutablePointer<CChar>?,
+    _: UnsafeMutablePointer<Int>?,
+    _: UInt32
 ) -> UnsafeMutablePointer<CChar>?
 
 /// Determines which string literals passed to a call are localization keys, from the parameter types of the called

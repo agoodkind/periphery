@@ -92,7 +92,7 @@ extension GenericProjectDriver: ProjectDriver {
             xibPaths: xibPaths,
             xcDataModelPaths: xcDataModelsPaths,
             xcMappingModelPaths: xcMappingModelsPaths,
-            xcStringsPaths: xcStringsPaths
+            xcStringsPaths: Dictionary(uniqueKeysWithValues: xcStringsPaths.map { ($0, Set<String>()) })
         )
     }
 }

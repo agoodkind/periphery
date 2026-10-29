@@ -29,3 +29,19 @@ public struct LocalizedStringCallSite: Hashable {
         Set(arguments.flatMap(\.keys))
     }
 }
+
+/// The structure records the source location of a function call. The call builds a localization key from a runtime
+/// value.
+/// `prefix` contains the static text at the start of every possible key and is empty when the expression does not
+/// start with a string literal.
+public struct LocalizedStringUnresolvedKey: Hashable {
+    public let prefix: String
+    public let line: Int
+    public let column: Int
+
+    public init(prefix: String, line: Int, column: Int) {
+        self.prefix = prefix
+        self.line = line
+        self.column = column
+    }
+}

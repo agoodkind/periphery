@@ -139,7 +139,7 @@
             let xibPaths = targets.flatMapSet { $0.files(kind: .interfaceBuilder) }
             let xcDataModelPaths = targets.flatMapSet { $0.files(kind: .xcDataModel) }
             let xcMappingModelPaths = targets.flatMapSet { $0.files(kind: .xcMappingModel) }
-            let xcStringsPaths = targets.flatMapSet { $0.files(kind: .xcStrings) }
+            let xcStringsPaths = catalogModules(targets: targets, sourceFiles: Set(sourceFiles.keys))
 
             return IndexPlan(
                 sourceFiles: sourceFiles,
@@ -149,6 +149,31 @@
                 xcMappingModelPaths: xcMappingModelPaths,
                 xcStringsPaths: xcStringsPaths
             )
+        }
+
+        // MARK: - Private
+
+        /// The function maps each String Catalog in a target's resources build phase or synchronized folder to that
+        /// target's modules.
+        /// It obtains the modules from index store records for the target's Swift source files.
+        private func catalogModules(targets: Set<XcodeTarget>, sourceFiles: Set<SourceFile>) -> [FilePath: Set<String>] {
+            let modulesBySourcePath = Dictionary(
+                sourceFiles.map { ($0.path.lexicallyNormalized(), $0.modules) },
+                uniquingKeysWith: { $0.union($1) }
+            )
+            var modulesByCatalog: [FilePath: Set<String>] = [:]
+
+            for target in targets {
+                let targetModules = target.swiftSourceFiles.reduce(into: Set<String>()) { result, path in
+                    result.formUnion(modulesBySourcePath[path] ?? [])
+                }
+
+                for catalog in target.files(kind: .xcStrings) {
+                    modulesByCatalog[catalog, default: []].formUnion(targetModules)
+                }
+            }
+
+            return modulesByCatalog
         }
     }
 #endif

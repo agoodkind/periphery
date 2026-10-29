@@ -124,6 +124,7 @@ public struct PackageDescription: Decodable {
 
 public struct Target: Decodable {
     public let name: String
+    public let c99name: String?
     public let type: String
     public let path: String
     public let resources: [Resource]?

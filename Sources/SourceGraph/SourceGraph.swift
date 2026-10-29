@@ -25,6 +25,8 @@ public final class SourceGraph {
     public private(set) var functionsWithIgnoredParameters: Set<Declaration> = []
     public private(set) var platformConditionalNames: [String: PlatformConditionalNameUse] = [:]
     public private(set) var usedLocalizedStringKeys: Set<String> = []
+    public private(set) var localizedStringKeyFormats: Set<[String]> = []
+    public private(set) var unresolvedLocalizedStringKeyPrefixesByModule: [String: Set<String>] = [:]
 
     private var indexedModules: Set<String> = []
     private var unindexedExportedModules: Set<String> = []
@@ -234,6 +236,18 @@ public final class SourceGraph {
 
     public func addUsedLocalizedStringKeys(_ keys: Set<String>) {
         usedLocalizedStringKeys.formUnion(keys)
+    }
+
+    public func addLocalizedStringKeyFormats(_ formats: Set<[String]>) {
+        localizedStringKeyFormats.formUnion(formats)
+    }
+
+    public func addUnresolvedLocalizedStringKeyPrefixes(_ prefixes: Set<String>, modules: Set<String>) {
+        guard !prefixes.isEmpty else { return }
+
+        for module in modules {
+            unresolvedLocalizedStringKeyPrefixesByModule[module, default: []].formUnion(prefixes)
+        }
     }
 
     func markUsed(_ declaration: Declaration) {

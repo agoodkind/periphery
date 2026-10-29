@@ -9,8 +9,7 @@ final class XCStringsParser {
     }
 
     func parse() throws -> Set<String> {
-        guard let data = FileManager.default.contents(atPath: path.string) else { return [] }
-
+        let data = try Data(contentsOf: URL(fileURLWithPath: path.string))
         let catalog = try JSONDecoder().decode(XCStringsCatalog.self, from: data)
         return Set(catalog.strings.keys)
     }

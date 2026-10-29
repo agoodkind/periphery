@@ -66,7 +66,7 @@ public struct IndexPipeline {
 
         if !plan.xcStringsPaths.isEmpty, !configuration.disableUnusedLocalizedStringAnalysis {
             try XCStringsIndexer(
-                files: plan.xcStringsPaths,
+                modulesByFile: plan.xcStringsPaths,
                 graph: graph,
                 logger: logger,
                 configuration: configuration

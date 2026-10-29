@@ -25,6 +25,13 @@ public final class LocalizedStringSyntaxVisitor: PeripherySyntaxVisitor {
 
     public private(set) var usedStringKeys: Set<String> = []
     public private(set) var callSites: [LocalizedStringCallSite] = []
+    /// The property stores text segments from interpolated string literals that the file passes as call arguments or
+    /// uses to initialize declarations with a localized type.
+    /// `LocalizedStringRetainer` matches a catalog key when format specifiers join those segments to form the key.
+    public private(set) var keyFormatSegments: Set<[String]> = []
+    /// The property stores function calls in the file that build localization keys from runtime values.
+    /// The syntax tree cannot resolve these calls to catalog keys.
+    public private(set) var unresolvedKeys: [LocalizedStringUnresolvedKey] = []
 
     private let sourceLocationBuilder: SourceLocationBuilder
 
@@ -39,6 +46,11 @@ public final class LocalizedStringSyntaxVisitor: PeripherySyntaxVisitor {
     public func visit(_ node: FunctionCallExprSyntax) {
         collectKnownCallKeys(node)
         collectCallSite(node)
+        collectUnresolvedKey(node)
+
+        for argument in node.arguments {
+            collectKeyFormat(argument.expression)
+        }
     }
 
     public func visit(_ node: VariableDeclSyntax) {
@@ -47,6 +59,7 @@ public final class LocalizedStringSyntaxVisitor: PeripherySyntaxVisitor {
 
             if let value = binding.initializer?.value {
                 usedStringKeys.formUnion(literalKeys(in: value))
+                collectKeyFormat(value)
             }
 
             if let accessorBlock = binding.accessorBlock {
@@ -79,6 +92,130 @@ public final class LocalizedStringSyntaxVisitor: PeripherySyntaxVisitor {
     }
 
     // MARK: - Private
+
+    private func collectKeyFormat(_ expression: ExprSyntax) {
+        if let stringLiteral = expression.as(StringLiteralExprSyntax.self) {
+            if let segments = Self.interpolatedTextSegments(of: stringLiteral) {
+                keyFormatSegments.insert(segments)
+            }
+        } else if let tuple = expression.as(TupleExprSyntax.self), tuple.elements.count == 1, let element = tuple.elements.first {
+            collectKeyFormat(element.expression)
+        } else if let ternary = expression.as(TernaryExprSyntax.self) {
+            collectKeyFormat(ternary.thenExpression)
+            collectKeyFormat(ternary.elseExpression)
+        } else if let sequence = expression.as(SequenceExprSyntax.self) {
+            for element in sequence.elements {
+                collectKeyFormat(element)
+            }
+        } else if let unresolvedTernary = expression.as(UnresolvedTernaryExprSyntax.self) {
+            collectKeyFormat(unresolvedTernary.thenExpression)
+        }
+    }
+
+    /// The function returns the literal text before, between, and after a string literal's interpolations.
+    /// It returns `nil` when the literal does not contain an interpolation.
+    private static func interpolatedTextSegments(of stringLiteral: StringLiteralExprSyntax) -> [String]? {
+        var segments: [String] = []
+        var currentText = ""
+        var hasInterpolation = false
+
+        for segment in stringLiteral.segments {
+            if let textSegment = segment.as(StringSegmentSyntax.self) {
+                currentText += textSegment.content.text
+            } else {
+                hasInterpolation = true
+                segments.append(currentText)
+                currentText = ""
+            }
+        }
+
+        guard hasInterpolation else { return nil }
+
+        segments.append(currentText)
+        return segments
+    }
+
+    private func collectUnresolvedKey(_ node: FunctionCallExprSyntax) {
+        guard let keyExpression = unresolvableKeyExpression(in: node) else { return }
+
+        let location = sourceLocationBuilder.location(at: node.positionAfterSkippingLeadingTrivia)
+        unresolvedKeys.append(
+            LocalizedStringUnresolvedKey(prefix: literalPrefix(of: keyExpression), line: location.line, column: location.column)
+        )
+    }
+
+    /// The function returns the key argument of `NSLocalizedString(_:)`, `LocalizedStringKey(_:)`,
+    /// `LocalizedStringResource(_:)`, `String.LocalizationValue(_:)`, or `localizedString(forKey:)` when it cannot
+    /// resolve that argument.
+    /// The format key initializers `LocalizedStringKey`, `LocalizedStringResource`, and `String.LocalizationValue`
+    /// accept static and interpolated string literals as resolvable.
+    /// `NSLocalizedString` and `localizedString(forKey:)` accept only static string literals as resolvable because they
+    /// receive a runtime `String`.
+    private func unresolvableKeyExpression(in node: FunctionCallExprSyntax) -> ExprSyntax? {
+        let calledExpression = node.calledExpression
+        let keyExpression: ExprSyntax
+        let acceptsKeyFormat: Bool
+
+        if let identifier = calledExpression.as(DeclReferenceExprSyntax.self),
+           ["NSLocalizedString", "LocalizedStringKey", "LocalizedStringResource"].contains(identifier.baseName.text),
+           let firstArgument = node.arguments.first,
+           firstArgument.label == nil
+        {
+            keyExpression = firstArgument.expression
+            acceptsKeyFormat = identifier.baseName.text != "NSLocalizedString"
+        } else if let memberAccess = calledExpression.as(MemberAccessExprSyntax.self),
+                  memberAccess.declName.baseName.text == "LocalizationValue",
+                  let firstArgument = node.arguments.first,
+                  firstArgument.label == nil
+        {
+            keyExpression = firstArgument.expression
+            acceptsKeyFormat = true
+        } else if let memberAccess = calledExpression.as(MemberAccessExprSyntax.self),
+                  memberAccess.declName.baseName.text == "localizedString",
+                  let forKeyArgument = node.arguments.first(where: { $0.label?.text == "forKey" })
+        {
+            keyExpression = forKeyArgument.expression
+            acceptsKeyFormat = false
+        } else {
+            return nil
+        }
+
+        if let stringLiteral = keyExpression.as(StringLiteralExprSyntax.self) {
+            let isInterpolated = Self.interpolatedTextSegments(of: stringLiteral) != nil
+            return isInterpolated && !acceptsKeyFormat ? keyExpression : nil
+        }
+
+        return literalKeys(in: keyExpression).isEmpty ? keyExpression : nil
+    }
+
+    /// The function returns the text before a string literal's first interpolation or the left string literal of a
+    /// `+` concatenation.
+    /// It returns an empty string for every other expression.
+    private func literalPrefix(of expression: ExprSyntax) -> String {
+        if let stringLiteral = expression.as(StringLiteralExprSyntax.self) {
+            return Self.interpolatedTextSegments(of: stringLiteral)?.first ?? stringLiteral.representedLiteralValue ?? ""
+        }
+
+        if let sequence = expression.as(SequenceExprSyntax.self) {
+            let elements = Array(sequence.elements)
+
+            if elements.count >= 3,
+               let binaryOperator = elements[1].as(BinaryOperatorExprSyntax.self),
+               binaryOperator.operator.text == "+"
+            {
+                return literalPrefix(of: elements[0])
+            }
+        }
+
+        if let infix = expression.as(InfixOperatorExprSyntax.self),
+           let binaryOperator = infix.operator.as(BinaryOperatorExprSyntax.self),
+           binaryOperator.operator.text == "+"
+        {
+            return literalPrefix(of: infix.leftOperand)
+        }
+
+        return ""
+    }
 
     private func collectDefaultValueKeys(_ clause: FunctionParameterClauseSyntax) {
         for parameter in clause.parameters {
