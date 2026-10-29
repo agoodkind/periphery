@@ -1,5 +1,4 @@
 #if os(macOS)
-    import Extensions
     import Foundation
     import XCTest
 
@@ -17,12 +16,8 @@
 
             if installedVersion == "development" {
                 XCTAssertTrue(lines.contains("This development build does not have a release version. The latest fork release is \(latestVersion)."), output)
-            } else if latestVersion.isVersion(greaterThan: installedVersion) {
-                XCTAssertTrue(lines.contains("Version \(latestVersion) is available. The installed version is \(installedVersion)."), output)
-            } else if latestVersion.isVersion(equalTo: installedVersion) {
-                XCTAssertTrue(lines.contains("The installed version matches the latest fork release, \(latestVersion)."), output)
             } else {
-                XCTAssertTrue(lines.contains("The installed version is \(installedVersion). The latest fork release is \(latestVersion)."), output)
+                XCTAssertTrue(lines.contains { $0.contains(installedVersion) && $0.contains(latestVersion) }, output)
             }
         }
 

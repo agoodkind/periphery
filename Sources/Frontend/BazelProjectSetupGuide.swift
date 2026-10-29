@@ -20,7 +20,7 @@ final class BazelProjectSetupGuide: SetupGuideHelpers, SetupGuide {
         if PeripheryVersion == "development" {
             print("Find a published tag at https://github.com/agoodkind/periphery/releases")
             print("Enter a published fork release tag: ", terminator: "")
-            guard let input = readLine(), !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            guard let input = readLine()?.trimmingCharacters(in: .whitespacesAndNewlines), !input.isEmpty else {
                 throw PeripheryError.usageError("A published fork release tag is required.")
             }
             tag = input
