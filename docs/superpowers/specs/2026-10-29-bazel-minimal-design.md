@@ -1,10 +1,10 @@
 # Minimal Bazel support
 
-Build the Periphery fork with Bazel and scan a real Swift executable on macOS. A consumer selects the fork directly at an exact commit. The scan preserves declarations the executable uses, reports a deliberately unused declaration, returns a failure status under `--strict`, and returns success when that declaration is removed.
+Build the Periphery fork with Bazel and scan a real Swift executable on macOS. A consumer selects a published fork release. The scan does not report declarations the executable uses. It reports a deliberately unused declaration and returns a failure status under `--strict`. It returns success when that declaration is removed.
 
 ## Approach
 
-Reuse the existing module, build targets, project driver, and scan rule. Fix only failures demonstrated by the build and consumer scan. A separate integration fixture supplies the regression and the setup example. Native execution in this checkout keeps the build and scan changes together.
+Reuse the existing module, build targets, project driver, and scan rule. Fix only failures demonstrated by the build and consumer scan. A separate integration fixture supplies the regression and the setup example.
 
 The user approved restoring the existing integration and then requested a bounded first milestone. Replacing it with a separate rules package would require another maintained project. The first milestone proves the build and scan before the CI and publication changes.
 

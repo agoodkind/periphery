@@ -2,7 +2,7 @@
 
 > Use `executing-plans` to implement the tasks in order. Track steps with checkbox syntax.
 
-**Goal:** Complete the first milestone of the approved Bazel setup: build the fork, verify a real macOS Swift consumer scan, and open a focused PR.
+**Goal:** Build the fork and verify a real macOS Swift consumer scan.
 
 **Architecture:** Retain the existing Bazel module and scan integration. Use a small independent consumer with an exact fork override. The consumer compiles real Swift sources and invokes Periphery through its public Bazel mode.
 
@@ -12,10 +12,7 @@
 
 ## Global constraints
 
-- Preserve the parallel versioning changes and the existing release-time version stamping contract.
-- Keep the current module identity; coordinate any required dependency changes.
-- Use real compiler dependencies and index records. Do not add mocks or baselines that excuse the intended unused-code control.
-- Keep one PR for build compatibility, the consumer regression, and its setup instructions.
+Apply the constraints in the specification to every task.
 
 ## Review focus
 
@@ -54,4 +51,4 @@ Affected files depend on the demonstrated failure: `MODULE.bazel`, `MODULE.bazel
 
 ## Required follow-through
 
-The approved setup also requires Linux Swift coverage, Apple application coverage on macOS, CI, and package-catalog publication. The bounded first milestone establishes the working build and scan needed by those changes; it does not remove them from scope. Define their exact verification and PR boundaries after the first scan establishes the compatible toolchain and dependencies. Coordinate version metadata with the parallel versioning owner.
+Complete the remaining approved scope in the specification after the first milestone.
