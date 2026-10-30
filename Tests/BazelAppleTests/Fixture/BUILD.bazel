@@ -16,6 +16,16 @@ apple_resource_bundle(
     resources = ["Second.storyboard"],
 )
 
+apple_resource_bundle(
+    name = "first_resources",
+    resources = ["First.xib"],
+)
+
+apple_resource_bundle(
+    name = "second_resources",
+    resources = ["Second.xib"],
+)
+
 swift_library(
     name = "private_helper",
     srcs = glob(["Private/*.swift"]),
@@ -25,6 +35,10 @@ swift_library(
 swift_library(
     name = "app_sources",
     srcs = glob(["Sources/*.swift"]),
+    data = [
+        ":first_resources",
+        ":second_resources",
+    ],
     private_deps = [":private_helper"],
 )
 

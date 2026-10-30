@@ -98,7 +98,8 @@ def _scan_inputs_aspect_impl(target, ctx):
                 plists.extend(info.infoplists[0][2].to_list())
 
             if hasattr(info, "xibs"):
-                xibs.extend(info.xibs[0][2].to_list())
+                for bucket in info.xibs:
+                    xibs.extend(bucket[2].to_list())
 
             if hasattr(info, "storyboards"):
                 # Periphery uses the same parser for xibs and storyboards.
