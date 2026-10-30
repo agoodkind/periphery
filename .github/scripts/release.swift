@@ -389,6 +389,49 @@ func git(_ arguments: [String]) throws -> String {
     try run("git", arguments, outputMode: .capture)
 }
 
+func checkReleaseSource() throws {
+    let source = try required("SOURCE_SHA")
+    let requested = try required("REQUESTED_TAG", allowEmpty: true)
+    let head = try git(["rev-parse", "HEAD"])
+    guard source == head else {
+        throw ReleaseError("SOURCE_SHA must equal the checked-out commit \(head)")
+    }
+
+    let output = try URL(fileURLWithPath: required("GITHUB_OUTPUT"))
+    if !requested.isEmpty {
+        try append("current=true\n", to: output)
+        return
+    }
+
+    let branch = try required("DEFAULT_BRANCH")
+    let reference = "refs/heads/\(branch)"
+    let remote = try lines(git(["ls-remote", "--heads", "origin", reference]))
+    guard remote.count == 1 else {
+        throw ReleaseError("Origin must provide the default branch \(reference)")
+    }
+
+    let fields = remote[0].split(separator: "\t", omittingEmptySubsequences: false)
+    guard fields.count == 2, !fields[0].isEmpty, fields[1] == reference else {
+        throw ReleaseError("Origin returned an invalid default branch reference for \(reference)")
+    }
+
+    let current = fields[0] == head
+    try append("current=\(current)\n", to: output)
+    if !current {
+        print("Source \(head) does not match the current default branch. Request a current release workflow.")
+    }
+}
+
+func dispatchCurrentRelease() async throws {
+    struct Dispatch: Encodable { let ref: String }
+
+    let branch = try required("DEFAULT_BRANCH")
+    let github = try GitHub(repository: required("GITHUB_REPOSITORY"), token: required("GH_TOKEN"))
+    _ = try await github.send("repos/\(github.repository)/actions/workflows/release.yaml/dispatches",
+                              method: "POST", value: Dispatch(ref: branch))
+    print("Requested the release workflow for \(branch).")
+}
+
 func verifyReleaseTag(_ version: ReleaseVersion, source: String) throws {
     let reference = "refs/tags/\(version)"
     let commit = try git(["rev-parse", "\(reference)^{commit}"])
@@ -949,6 +992,8 @@ do {
 
     let command = CommandLine.arguments[1]
     switch command {
+    case "check-source": try checkReleaseSource()
+    case "dispatch-current": try await dispatchCurrentRelease()
     case "prepare": try prepare()
     case "collect-release-input": try await collectReleaseInput()
     case "check-pr-labels": try checkPullRequestLabels()

@@ -21,6 +21,10 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
     outputs:
       release: ${{ steps.prepare.outputs.release }}
       version: ${{ steps.prepare.outputs.version }}
@@ -28,16 +32,32 @@ jobs:
       - uses: actions/checkout@v4
         id: source
         with:
-          ref: ${{ inputs.tag || github.event.repository.default_branch }}
+          ref: ${{ inputs.tag || github.sha }}
           fetch-depth: 0
 
       - name: Check out release tools
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag && github.sha || steps.source.outputs.commit }}
+          ref: ${{ github.sha }}
           path: workflow-tools
 
+      - name: Check release source
+        id: source_check
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.commit }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: swift workflow-tools/.github/scripts/release.swift check-source
+
+      - name: Request current release
+        if: steps.source_check.outputs.current == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: swift workflow-tools/.github/scripts/release.swift dispatch-current
+
       - name: Collect published releases and pull request labels
+        if: steps.source_check.outputs.current == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_TAG: ${{ inputs.tag }}
@@ -46,6 +66,7 @@ jobs:
 
       - name: Prepare release version
         id: prepare
+        if: steps.source_check.outputs.current == 'true'
         env:
           SOURCE_SHA: ${{ steps.source.outputs.commit }}
           REQUESTED_TAG: ${{ inputs.tag }}

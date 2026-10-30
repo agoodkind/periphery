@@ -707,7 +707,7 @@ Release labels:
 
 Versions use `MAJOR.MINOR.PATCH-agoodkind.N` and compare numerically: `3.10.0` is newer than `3.9.0`.
 
-The release workflow runs on every push to the default branch. An automatic run uses the current default-branch commit when its job starts. It considers every pull request merged since the newest complete published release that is an ancestor of the source commit. The highest release label determines one bump for the entire release, never one bump per commit. Several `release:patch` pull requests produce one patch bump. The workflow does not publish a release when every pull request in that range uses `release:none`.
+The release workflow runs on every push to the default branch. If an automatic run starts with a different commit from the default branch, the run requests a new workflow and stops before release work. An explicit tag retry uses the requested tag. The workflow considers every pull request merged since the newest complete published release that is an ancestor of the source commit. The highest release label determines one bump for the entire release, never one bump per commit. Several `release:patch` pull requests produce one patch bump. The workflow does not publish a release when every pull request in that range uses `release:none`.
 
 Before building, the workflow reserves the new version by pushing the Git ref `refs/release-reservations/<version>` at the source commit. It creates and verifies the release tag at that commit. Creating a reservation or tag does not publish a release. New versions start above every existing tag and reservation, and two commits never receive the same version.
 

@@ -191,6 +191,18 @@ final class Fixture {
         return try PrepareResult(status: result.status, output: result.output, values: outputs(output))
     }
 
+    func checkSource(_ checkout: Checkout, source: String, requested: String = "", branch: String = "main") throws -> PrepareResult {
+        let output = root.appendingPathComponent("output-\(UUID().uuidString)")
+        try Data().write(to: output)
+        let result = try execute(release.path, ["check-source"], at: checkout.directory, environment: [
+            "SOURCE_SHA": source,
+            "REQUESTED_TAG": requested,
+            "DEFAULT_BRANCH": branch,
+            "GITHUB_OUTPUT": output.path,
+        ])
+        return try PrepareResult(status: result.status, output: result.output, values: outputs(output))
+    }
+
     func checkRelease(_ checkout: Checkout, version: String) throws -> String? {
         let output = root.appendingPathComponent("output-\(UUID().uuidString)")
         try Data().write(to: output)
@@ -335,6 +347,38 @@ func testOverflow(_ release: URL, tag: String, label: String, component: String)
     let change = try checkout.commit("Merge pull request 100")
     let result = try fixture.prepare(checkout, published: [tag], labels: [entry(change, 100, [label])])
     try expectRejection(result, checkout, message: "Version \(tag) has no room for a \(label) release because its \(component) number is \(Int.max)")
+}
+
+func testReleaseSourceSelection(_ release: URL) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    let initial = try checkout.git(["rev-parse", "HEAD"])
+    try checkout.tag("3.8.0-agoodkind.7")
+    let old = try fixture.retryCheckout("older-source", at: initial)
+
+    let first = try fixture.checkSource(checkout, source: initial)
+    try expect(first.status == 0 && first.values["current"] == "true", "the current source must proceed")
+
+    var latest = try checkout.commit("Merge pull request 1")
+    let staleAfterOne = try fixture.checkSource(old, source: initial)
+    try expect(staleAfterOne.status == 0 && staleAfterOne.values["current"] == "false", "one newer merge must request the current workflow")
+    let currentAfterOne = try fixture.checkSource(checkout, source: latest)
+    try expect(currentAfterOne.status == 0 && currentAfterOne.values["current"] == "true", "the source after one merge must proceed")
+
+    for index in 2 ... 20 {
+        latest = try checkout.commit("Merge pull request \(index)")
+    }
+    let stale = try fixture.checkSource(old, source: initial)
+    try expect(stale.status == 0 && stale.values["current"] == "false", "an older source must request the current workflow")
+    let current = try fixture.checkSource(checkout, source: latest)
+    try expect(current.status == 0 && current.values["current"] == "true", "the source after twenty merges must proceed")
+
+    let retry = try fixture.checkSource(old, source: initial, requested: "3.8.0-agoodkind.7")
+    try expect(retry.status == 0 && retry.values["current"] == "true", "an explicit historical tag retry must proceed")
+    let mismatch = try fixture.checkSource(checkout, source: initial)
+    try expect(mismatch.status != 0 && mismatch.values["current"] == nil, "a source mismatch must fail")
+    let missing = try fixture.checkSource(checkout, source: latest, branch: "missing")
+    try expect(missing.status != 0 && missing.values["current"] == nil, "a missing default branch must fail")
 }
 
 func testTagPushFailureStopsPreparation(_ release: URL) throws {
@@ -775,6 +819,7 @@ do {
         ("patch overflow", {
             try testOverflow(release, tag: "3.8.\(Int.max)-agoodkind.1", label: "release:patch", component: "patch")
         }),
+        ("release source selection", { try testReleaseSourceSelection(release) }),
         ("tag push failure stops preparation", { try testTagPushFailureStopsPreparation(release) }),
         ("conflicting tag cannot move", { try testConflictingTagDoesNotMove(release) }),
         ("explicit historical tag retry", { try testExplicitHistoricalTag(release) }),
