@@ -17,7 +17,7 @@ final class XCDataModelParser {
         case let .directory(path):
             try FileManager.default.contentsOfDirectory(atPath: path.string).flatMap { subPath -> [AssetReference] in
                 let modelPath = path.appending(subPath)
-                guard modelPath.extension == "xcdatamodel" else { return [] }
+                guard modelPath.extension?.lowercased() == "xcdatamodel" else { return [] }
 
                 return try parseContents(at: modelPath.appending("contents"))
             }

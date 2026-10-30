@@ -229,6 +229,48 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
                 }
             }
             report("The scan reported both missing model files.")
+
+            let uppercaseModel = temporary.appendingPathComponent("First.XCDATAMODELD")
+            let uppercaseMapping = temporary.appendingPathComponent("ModelMapping.XCMAPPINGMODEL")
+            try manager.copyItem(at: fixture.appendingPathComponent("First.xcdatamodeld"), to: uppercaseModel)
+            try manager.moveItem(
+                at: uppercaseModel.appendingPathComponent("First.xcdatamodel"),
+                to: uppercaseModel.appendingPathComponent("First.XCDATAMODEL")
+            )
+            try manager.copyItem(at: fixture.appendingPathComponent("ModelMapping.xcmappingmodel"), to: uppercaseMapping)
+
+            let projectConfig = fixture.appendingPathComponent("bazel-bin/external/periphery++generated+periphery_generated/project_config.json")
+            var uppercaseConfig = try JSONDecoder().decode([String: [String]].self, from: Data(contentsOf: projectConfig))
+            for (kind, modelPath, mappingPath) in [
+                ("directories", uppercaseModel, uppercaseMapping),
+                ("files", uppercaseModel.appendingPathComponent("First.XCDATAMODEL/contents"), uppercaseMapping.appendingPathComponent("xcmapping.xml")),
+            ] {
+                uppercaseConfig["xcdatamodels"] = [modelPath.path]
+                uppercaseConfig["xcmappingmodels"] = [mappingPath.path]
+                let configPath = temporary.appendingPathComponent("uppercase-\(kind).json")
+                try JSONEncoder().encode(uppercaseConfig).write(to: configPath)
+                let log = temporary.appendingPathComponent("uppercase-\(kind).log")
+                guard manager.createFile(atPath: log.path, contents: nil) else {
+                    throw VerificationError.failed("Could not create \(log.path)")
+                }
+
+                let results = temporary.appendingPathComponent("uppercase-\(kind)-results.json")
+                let status = try run(
+                    ["run", "@periphery", "--", "scan", "--generic-project-config", configPath.path,
+                     "--strict", "--format", "json", "--write-results", results.path, "--disable-update-check"],
+                    in: fixture,
+                    log: log
+                )
+                guard status == 1, manager.fileExists(atPath: results.path) else {
+                    throw VerificationError.failed("The scan must process uppercase model \(kind). Log: \(log.path)")
+                }
+
+                let foundNames = try names(in: results)
+                guard foundNames == ["SecondTransformer"] else {
+                    throw VerificationError.failed("The scan must retain uppercase model references; received \(foundNames). Log: \(log.path)")
+                }
+            }
+            report("The scan retained references from uppercase model directories and files.")
         }
 
         if let catalog = fixtureSpec.catalog {

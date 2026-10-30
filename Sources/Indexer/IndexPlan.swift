@@ -54,17 +54,17 @@ enum ModelInput {
     init(path: FilePath, kind: Kind) throws {
         switch kind {
         case .data:
-            if path.extension == "xcdatamodeld" {
+            if path.extension?.lowercased() == "xcdatamodeld" {
                 self = .directory(path)
-            } else if path.lastComponent?.string == "contents", path.removingLastComponent().extension == "xcdatamodel" {
+            } else if path.lastComponent?.string == "contents", path.removingLastComponent().extension?.lowercased() == "xcdatamodel" {
                 self = .file(path)
             } else {
                 throw ValidationError.invalidPath(path)
             }
         case .mapping:
-            if path.extension == "xcmappingmodel" {
+            if path.extension?.lowercased() == "xcmappingmodel" {
                 self = .directory(path)
-            } else if path.lastComponent?.string == "xcmapping.xml", path.removingLastComponent().extension == "xcmappingmodel" {
+            } else if path.lastComponent?.string == "xcmapping.xml", path.removingLastComponent().extension?.lowercased() == "xcmappingmodel" {
                 self = .file(path)
             } else {
                 throw ValidationError.invalidPath(path)
