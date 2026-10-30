@@ -389,6 +389,37 @@ func git(_ arguments: [String]) throws -> String {
     try run("git", arguments, outputMode: .capture)
 }
 
+func verifyReleaseTag(_ version: ReleaseVersion, source: String) throws {
+    let reference = "refs/tags/\(version)"
+    let commit = try git(["rev-parse", "\(reference)^{commit}"])
+    guard commit == source else {
+        throw ReleaseError("Tag \(version) does not match source commit \(source)")
+    }
+
+    let object = try git(["rev-parse", reference])
+    let remote = try git(["ls-remote", "--refs", "origin", reference])
+    guard remote == "\(object)\t\(reference)" else {
+        throw ReleaseError("Origin tag \(version) does not match the verified local tag")
+    }
+}
+
+func createReleaseTag(_ version: ReleaseVersion, source: String) throws {
+    let reference = "refs/tags/\(version)"
+    let tags = try git(["tag", "--list", version.description])
+    if tags.isEmpty {
+        try run("git", ["tag", version.description, source])
+    }
+
+    guard try git(["rev-parse", "\(reference)^{commit}"]) == source else {
+        throw ReleaseError("Tag \(version) does not match source commit \(source)")
+    }
+
+    if try git(["ls-remote", "--refs", "origin", reference]).isEmpty {
+        try run("git", ["push", "origin", reference])
+    }
+    try verifyReleaseTag(version, source: source)
+}
+
 func lines(_ text: String) -> [String] {
     text.split(separator: "\n").map(String.init)
 }
@@ -716,15 +747,7 @@ struct ReleaseContext {
                 throw ReleaseError("Release asset \(name) does not exist")
             }
         }
-        let tags = try run("git", ["tag", "--list", version], outputMode: .capture)
-        if tags.isEmpty {
-            try run("git", ["tag", version, source])
-        } else {
-            guard try run("git", ["rev-parse", "\(version)^{commit}"], outputMode: .capture) == source else {
-                throw ReleaseError("Tag \(version) does not match source commit \(source)")
-            }
-        }
-        try run("git", ["push", "origin", "refs/tags/\(version)"])
+        try verifyReleaseTag(release, source: source)
         let release: GitHubRelease
         if let existing = try await github.release(version) {
             guard existing.isDraft else { throw ReleaseError("Published release assets cannot change") }
@@ -865,6 +888,7 @@ func prepare() throws {
     let root = URL(fileURLWithPath: files.currentDirectoryPath)
     try replace(#"^let PeripheryVersion = ".*"$"#, with: "let PeripheryVersion = \"\(version)\"", in: root.appendingPathComponent("Sources/Frontend/Version.swift"))
     try replace("^VERSION=.*$", with: "VERSION=\(version)", in: root.appendingPathComponent("scripts/install.sh"))
+    try createReleaseTag(version, source: head)
     try append("release=true\nversion=\(version)\nversion_source=\(source.rawValue)\nsource_sha=\(head)\n", to: output)
     try append("VERSION=\(version)\n", to: URL(fileURLWithPath: required("GITHUB_ENV")))
 }

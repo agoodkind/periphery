@@ -707,11 +707,11 @@ Release labels:
 
 Versions use `MAJOR.MINOR.PATCH-agoodkind.N` and compare numerically: `3.10.0` is newer than `3.9.0`.
 
-The release workflow runs on every push to the default branch. It considers every pull request merged since the newest complete published release that is an ancestor of the source commit. The highest release label determines one bump for the entire release, never one bump per commit. Several `release:patch` pull requests produce one patch bump. The workflow does not publish a release when every pull request in that range uses `release:none`.
+The release workflow runs on every push to the default branch. An automatic run uses the current default-branch commit when its job starts. It considers every pull request merged since the newest complete published release that is an ancestor of the source commit. The highest release label determines one bump for the entire release, never one bump per commit. Several `release:patch` pull requests produce one patch bump. The workflow does not publish a release when every pull request in that range uses `release:none`.
 
-Before building, the workflow reserves the new version by pushing the Git ref `refs/release-reservations/<version>` at the source commit. A reservation is not a published release. The workflow creates the release tag only when it publishes. New versions start above every existing tag and reservation, and two commits never receive the same version.
+Before building, the workflow reserves the new version by pushing the Git ref `refs/release-reservations/<version>` at the source commit. It creates and verifies the release tag at that commit. Creating a reservation or tag does not publish a release. New versions start above every existing tag and reservation, and two commits never receive the same version.
 
-A retry reuses the commit's reservation, or its tag if publication had started, even when another commit reserved or published a newer version in between. If the retry publishes a version older than the newest complete published release, it does not make that version the latest GitHub release or change the Homebrew formula. Published tags and their assets never change.
+A retry reuses the commit's tag or reservation, even when another commit reserved or published a newer version in between. If the retry publishes a version older than the newest complete published release, it does not make that version the latest GitHub release or change the Homebrew formula. Published tags and their assets never change.
 
 ## Sponsors ![Sponsors](assets/sponsor-20.svg)
 

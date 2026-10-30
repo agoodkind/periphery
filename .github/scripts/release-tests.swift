@@ -174,7 +174,7 @@ final class Fixture {
         return checkout
     }
 
-    func prepare(_ checkout: Checkout, published: [String], labels: [CommitEntry] = []) throws -> PrepareResult {
+    func prepare(_ checkout: Checkout, published: [String], labels: [CommitEntry] = [], requested: String = "", source: String = "") throws -> PrepareResult {
         let output = root.appendingPathComponent("output-\(UUID().uuidString)")
         let githubEnvironment = root.appendingPathComponent("environment-\(UUID().uuidString)")
         let inputPath = root.appendingPathComponent("release-input-\(UUID().uuidString).json")
@@ -182,8 +182,8 @@ final class Fixture {
         try Data().write(to: githubEnvironment)
         try JSONEncoder().encode(ReleaseInputEntry(publishedReleases: published, commits: labels)).write(to: inputPath)
         let result = try execute(release.path, ["prepare"], at: checkout.directory, environment: [
-            "SOURCE_SHA": "",
-            "REQUESTED_TAG": "",
+            "SOURCE_SHA": source,
+            "REQUESTED_TAG": requested,
             "GITHUB_OUTPUT": output.path,
             "GITHUB_ENV": githubEnvironment.path,
             "RELEASE_INPUT_PATH": inputPath.path,
@@ -226,6 +226,8 @@ func expectAllocation(_ result: PrepareResult, _ checkout: Checkout, version: St
     try expect(result.values["version_source"] == "new-reservation", "prepare must reserve a new version:\n\(result.output)")
     let reserved = try checkout.remoteRefs("\(reservationNamespace)\(version)")
     try expect(reserved["\(reservationNamespace)\(version)"] == commit, "origin must hold reservation \(version) at \(commit)")
+    let tags = try checkout.remoteRefs("refs/tags/\(version)")
+    try expect(tags["refs/tags/\(version)"] == commit, "origin must hold tag \(version) at \(commit) before the build")
     try expect(checkout.contents("Sources/Frontend/Version.swift").contains("\"\(version)\""), "Version.swift must contain \(version)")
     try expect(checkout.contents("scripts/install.sh").contains("VERSION=\(version)\n"), "install.sh must contain \(version)")
 }
@@ -335,6 +337,69 @@ func testOverflow(_ release: URL, tag: String, label: String, component: String)
     try expectRejection(result, checkout, message: "Version \(tag) has no room for a \(label) release because its \(component) number is \(Int.max)")
 }
 
+func testTagPushFailureStopsPreparation(_ release: URL) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    try checkout.tag("3.8.0-agoodkind.7")
+    let source = try checkout.commit("Merge pull request 100")
+    let version = "3.8.1-agoodkind.1"
+    let reservation = "\(reservationNamespace)\(version)"
+    try checkout.git(["push", "origin", "\(source):\(reservation)"])
+    try checkout.git(["remote", "set-url", "--push", "origin", fixture.root.appendingPathComponent("missing.git").path])
+
+    let result = try fixture.prepare(checkout, published: ["3.8.0-agoodkind.7"])
+    try expect(result.status != 0, "prepare must fail when it cannot push the release tag")
+    try expect(result.values["release"] == nil, "failed tag creation must not request a build")
+    try expect(try checkout.remoteRefs("refs/tags/\(version)").isEmpty, "origin must not contain the failed tag")
+    try expect(try checkout.remoteRefs(reservation)[reservation] == source, "the failed push must preserve the reservation")
+}
+
+func testConflictingTagDoesNotMove(_ release: URL) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    try checkout.tag("3.8.0-agoodkind.7")
+    let source = try checkout.commit("Merge pull request 100")
+    let other = try checkout.commit("Merge pull request 101")
+    let version = "3.8.1-agoodkind.1"
+    let reservation = "\(reservationNamespace)\(version)"
+    try checkout.tag(version, at: other)
+    try checkout.git(["push", "origin", "\(source):\(reservation)"])
+
+    let retry = try fixture.retryCheckout("conflicting-tag", at: source)
+    let result = try fixture.prepare(retry, published: ["3.8.0-agoodkind.7"])
+    try expect(result.status != 0 && result.output.contains("does not match source commit"), "prepare must reject the conflicting tag")
+    try expect(try retry.remoteRefs("refs/tags/\(version)")["refs/tags/\(version)"] == other, "prepare must not move the existing tag")
+}
+
+func testExplicitHistoricalTag(_ release: URL) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    try checkout.tag("3.8.0-agoodkind.7")
+    let source = try checkout.commit("Merge pull request 100")
+    let version = "3.8.1-agoodkind.1"
+    try checkout.tag(version, at: source)
+    _ = try checkout.commit("Merge pull request 101")
+
+    let retry = try fixture.retryCheckout("historical-tag", at: source)
+    let result = try fixture.prepare(retry, published: ["3.8.0-agoodkind.7"], requested: version)
+    try expect(result.status == 0, "the requested-tag retry failed: \(result.output)")
+    try expect(result.values["version"] == version && result.values["version_source"] == "requested-tag", "the retry must preserve the requested version")
+    try expect(try retry.remoteRefs("refs/tags/\(version)")["refs/tags/\(version)"] == source, "the retry must preserve the tagged source")
+}
+
+func testSelectedSourceMustMatchCheckout(_ release: URL) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    let other = try checkout.git(["rev-parse", "HEAD"])
+    try checkout.tag("3.8.0-agoodkind.7")
+    let source = try checkout.commit("Merge pull request 100")
+    let result = try fixture.prepare(checkout, published: ["3.8.0-agoodkind.7"],
+                                     labels: [entry(source, 100, ["release:patch"])], source: other)
+    try expect(result.status != 0 && result.output.contains("SOURCE_SHA must equal the checked-out commit"), "prepare must reject a different source")
+    try expect(try checkout.remoteRefs("\(reservationNamespace)*").isEmpty, "a different source must not reserve a version")
+    try expect(try checkout.remoteRefs("refs/tags/3.8.1-agoodkind.1").isEmpty, "a different source must not create a tag")
+}
+
 func testRetryAfterFailedBuild(_ release: URL) throws {
     let fixture = try Fixture(release: release)
     let checkout = try fixture.seed()
@@ -347,7 +412,7 @@ func testRetryAfterFailedBuild(_ release: URL) throws {
     let result = try fixture.prepare(retry, published: ["1.0.0-agoodkind.1"])
     try expect(result.status == 0, "the retry failed:\n\(result.output)")
     try expect(result.values["version"] == "1.0.1-agoodkind.1", "the retry must reuse reservation 1.0.1-agoodkind.1:\n\(result.output)")
-    try expect(result.values["version_source"] == "reservation", "the retry must report its reservation:\n\(result.output)")
+    try expect(result.values["version_source"] == "incomplete-publication", "the retry must report its incomplete tag:\n\(result.output)")
     try expect(retry.remoteRefs("\(reservationNamespace)*").count == 1, "the retry must not reserve a second version")
     try expect(fixture.checkRelease(retry, version: "1.0.1-agoodkind.1") == "false",
                "check-release must find that \(publishedRepository) has not published 1.0.1-agoodkind.1")
@@ -389,13 +454,11 @@ func testIncompletePublicationPredecessor(_ release: URL, formula: Data) throws 
     let commitA = try checkout.commit("Merge pull request 301")
     try expectAllocation(fixture.prepare(checkout, published: published, labels: [entry(commitA, 301, ["release:minor"])]),
                          checkout, version: "3.9.0-agoodkind.1", at: commitA)
-    try checkout.tag("3.9.0-agoodkind.1", at: commitA)
 
     let commitB = try checkout.commit("Merge pull request 302")
     try expectAllocation(fixture.prepare(checkout, published: published, labels: [
         entry(commitA, 301, ["release:minor"]), entry(commitB, 302, ["release:patch"]),
     ]), checkout, version: "3.10.0-agoodkind.1", at: commitB)
-    try checkout.tag("3.10.0-agoodkind.1", at: commitB)
 
     let retry = try fixture.retryCheckout("retry", at: commitA)
     let result = try fixture.prepare(retry, published: published)
@@ -550,7 +613,6 @@ func testOlderReservationRetry(_ release: URL, formula: Data) throws {
     try expectAllocation(fixture.prepare(checkout, published: ["3.8.0-agoodkind.7"], labels: [
         entry(commitA, 201, ["release:patch"]), entry(commitB, 202, ["release:patch"]),
     ]), checkout, version: "3.8.2-agoodkind.1", at: commitB)
-    try checkout.tag("3.8.2-agoodkind.1", at: commitB)
     let digestB = try tap.publish(fixture, from: checkout, version: "3.8.2-agoodkind.1", published: ["3.8.0-agoodkind.7"])
     try tap.expectFormula(fixture, version: "3.8.2-agoodkind.1", digest: digestB)
     let tapHead = try tap.head(fixture)
@@ -559,8 +621,7 @@ func testOlderReservationRetry(_ release: URL, formula: Data) throws {
     let result = try fixture.prepare(retry, published: ["3.8.0-agoodkind.7", "3.8.2-agoodkind.1"])
     try expect(result.status == 0, "the retry of commit A failed:\n\(result.output)")
     try expect(result.values["version"] == "3.8.1-agoodkind.1", "commit A must keep reservation 3.8.1-agoodkind.1:\n\(result.output)")
-    try expect(result.values["version_source"] == "reservation", "commit A must report its reservation:\n\(result.output)")
-    try retry.tag("3.8.1-agoodkind.1", at: commitA)
+    try expect(result.values["version_source"] == "incomplete-publication", "commit A must report its incomplete tag:\n\(result.output)")
     _ = try tap.publish(fixture, from: retry, version: "3.8.1-agoodkind.1", published: ["3.8.0-agoodkind.7", "3.8.2-agoodkind.1"])
     try expect(tap.head(fixture) == tapHead, "homebrew must not commit a formula for the older 3.8.1-agoodkind.1")
     try tap.expectFormula(fixture, version: "3.8.2-agoodkind.1", digest: digestB)
@@ -688,6 +749,11 @@ do {
         ("several release:patch pull requests", {
             try testAllocation(release, labelSets: [["release:patch"], ["release:patch"], ["release:patch"]], version: "3.8.1-agoodkind.1")
         }),
+        ("twenty merged pull requests", {
+            var labels = Array(repeating: ["release:patch"], count: 20)
+            labels[9] = ["release:minor"]
+            try testAllocation(release, labelSets: labels, version: "3.9.0-agoodkind.1")
+        }),
         ("release:none only", { try testNoneOnly(release) }),
         ("missing release label", {
             try testRejection(release, labels: ["bug"],
@@ -709,6 +775,10 @@ do {
         ("patch overflow", {
             try testOverflow(release, tag: "3.8.\(Int.max)-agoodkind.1", label: "release:patch", component: "patch")
         }),
+        ("tag push failure stops preparation", { try testTagPushFailureStopsPreparation(release) }),
+        ("conflicting tag cannot move", { try testConflictingTagDoesNotMove(release) }),
+        ("explicit historical tag retry", { try testExplicitHistoricalTag(release) }),
+        ("selected source must match checkout", { try testSelectedSourceMustMatchCheckout(release) }),
         ("retry after failed build", { try testRetryAfterFailedBuild(release) }),
         ("retry after tagged upload failure", { try testRetryAfterTaggedUploadFailure(release) }),
         ("retry after published release", { try testRetryAfterPublishedRelease(release) }),
