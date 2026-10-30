@@ -9,26 +9,38 @@
             let installedVersion = try run(executableURL, arguments: ["version"]).trimmingCharacters(in: .whitespacesAndNewlines)
             let output = try run(executableURL, arguments: ["check-update"])
             let lines = output.split(separator: "\n")
-            let releaseNotes = try XCTUnwrap(lines.first { $0.hasPrefix("Release notes: ") }, output)
+            let notesPrefix = "Release notes: "
+            let releaseNotes = try XCTUnwrap(lines.first { $0.hasPrefix(notesPrefix) }, output)
+            let releaseURL = try XCTUnwrap(URL(string: String(releaseNotes.dropFirst(notesPrefix.count))), output)
+            let components = try XCTUnwrap(URLComponents(url: releaseURL, resolvingAgainstBaseURL: false), output)
+            let tagPrefix = "/agoodkind/periphery/releases/tag/"
+            guard components.scheme == "https", components.host == "github.com", components.port == nil,
+                  components.user == nil, components.password == nil, components.query == nil, components.fragment == nil,
+                  components.percentEncodedPath.hasPrefix(tagPrefix),
+                  let latestVersion = String(components.percentEncodedPath.dropFirst(tagPrefix.count)).removingPercentEncoding,
+                  !latestVersion.isEmpty
+            else {
+                XCTFail("The release notes URL must identify a fork release: \(releaseURL)")
+                return
+            }
 
-            var request = try URLRequest(url: XCTUnwrap(URL(string: "https://github.com/agoodkind/periphery/releases/latest")))
+            var request = URLRequest(url: releaseURL)
             request.httpMethod = "HEAD"
             let (_, response) = try await URLSession.shared.data(for: request)
             let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
             XCTAssertEqual(httpResponse.statusCode, 200)
-            let finalURL = try XCTUnwrap(httpResponse.url)
-            XCTAssertEqual(releaseNotes, "Release notes: \(finalURL.absoluteString)", output)
+            XCTAssertEqual(httpResponse.url, releaseURL, output)
 
             if installedVersion == "development" {
-                let messagePrefix = "This development build does not have a release version. The latest fork release is "
-                let message = try XCTUnwrap(lines.first { $0.hasPrefix(messagePrefix) && $0.hasSuffix(".") }, output)
-                let tag = String(message.dropFirst(messagePrefix.count).dropLast())
-                let tagBase = try XCTUnwrap(URL(string: "https://github.com/agoodkind/periphery/releases/tag/"))
-                XCTAssertEqual(tagBase.appendingPathComponent(tag).path, finalURL.path, output)
-            } else if finalURL.absoluteString == "https://github.com/agoodkind/periphery/releases/tag/\(installedVersion)" {
+                XCTAssertTrue(lines.contains("This development build does not have a release version. The latest fork release is \(latestVersion)."), output)
+            } else if latestVersion == installedVersion {
                 XCTAssertTrue(lines.contains("The installed version matches the latest fork release, \(installedVersion)."), output)
             } else {
-                XCTAssertTrue(lines.contains { $0.contains(installedVersion) }, output)
+                let messages = [
+                    "Version \(latestVersion) is available. The installed version is \(installedVersion).",
+                    "The installed version is \(installedVersion). The latest fork release is \(latestVersion).",
+                ]
+                XCTAssertTrue(lines.contains { messages.contains(String($0)) }, output)
             }
         }
 
