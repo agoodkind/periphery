@@ -23,7 +23,7 @@ final class UpdateChecker {
         self.configuration = configuration
         let config = URLSessionConfiguration.ephemeral
         urlSession = URLSession(configuration: config)
-        latestReleaseURL = URL(string: "https://api.github.com/repos/agoodkind/periphery/releases/latest")!
+        latestReleaseURL = URL(string: "https://github.com/agoodkind/periphery/releases/latest")!
         semaphore = DispatchSemaphore(value: 0)
     }
 
@@ -38,9 +38,9 @@ final class UpdateChecker {
               configuration.outputFormat.supportsAuxiliaryOutput else { return }
 
         var urlRequest = URLRequest(url: latestReleaseURL)
-        urlRequest.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        urlRequest.httpMethod = "HEAD"
 
-        let task = urlSession.dataTask(with: urlRequest) { [weak self] data, _, error in
+        let task = urlSession.dataTask(with: urlRequest) { [weak self] _, response, error in
             guard let self else { return }
 
             if let error {
@@ -50,28 +50,43 @@ final class UpdateChecker {
                 return
             }
 
-            guard let jsonData = data,
-                  let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []) as? [AnyHashable: Any],
-                  let tagName = jsonObject["tag_name"] as? String
-            else {
-                var json = "N/A"
-
-                if let data, let decoded = String(bytes: data, encoding: .utf8) {
-                    json = decoded
-                }
-
-                let message = "Failed to identify latest release tag in: \(json)"
-                self.error = PeripheryError.updateCheckError(message: message)
-                debugLogger.debug(message)
-                semaphore.signal()
-                return
+            do {
+                latestVersion = try Self.releaseTag(from: response)
+            } catch {
+                self.error = error
+                debugLogger.debug(error.localizedDescription)
             }
-
-            latestVersion = tagName
             semaphore.signal()
         }
 
         task.resume()
+    }
+
+    private static func releaseTag(from response: URLResponse?) throws -> String {
+        guard let response = response as? HTTPURLResponse else {
+            throw PeripheryError.updateCheckError(message: "Latest release lookup did not return an HTTP response.")
+        }
+        guard response.statusCode == 200 else {
+            throw PeripheryError.updateCheckError(message: "Latest release lookup returned HTTP \(response.statusCode).")
+        }
+
+        let prefix = "/agoodkind/periphery/releases/tag/"
+        guard let url = response.url,
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.scheme == "https", components.host == "github.com",
+              components.port == nil, components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil,
+              components.percentEncodedPath.hasPrefix(prefix)
+        else {
+            throw PeripheryError.updateCheckError(message: "Latest release lookup did not redirect to a fork release.")
+        }
+
+        let encodedTag = String(components.percentEncodedPath.dropFirst(prefix.count))
+        guard let tag = encodedTag.removingPercentEncoding, !tag.isEmpty else {
+            throw PeripheryError.updateCheckError(message: "Latest release lookup did not identify a valid release tag.")
+        }
+
+        return tag
     }
 
     func notifyIfAvailable() {

@@ -137,11 +137,8 @@ jobs:
       run: ${{ env.swift_build }}
     - name: Scan
       run: ${{ env.periphery_scan }}
-    - name: Test without live update check
-      run: ${{ env.swift_test }} --skip CheckUpdateCommandTest
-    - name: Test live update check
-      if: ${{ matrix.step == '6.4' }}
-      run: ${{ env.swift_test }} --filter CheckUpdateCommandTest
+    - name: Test
+      run: ${{ env.swift_test }}
   linux:
     name: Linux
     strategy:

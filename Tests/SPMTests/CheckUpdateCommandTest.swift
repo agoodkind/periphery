@@ -3,7 +3,7 @@
     import XCTest
 
     final class CheckUpdateCommandTest: XCTestCase {
-        func testReportsLatestForkRelease() throws {
+        func testReportsLatestForkRelease() async throws {
             let testBundle = try XCTUnwrap(Bundle.allBundles.first { $0.bundlePath.hasSuffix(".xctest") })
             let executableURL = testBundle.bundleURL.deletingLastPathComponent().appendingPathComponent("periphery")
             let installedVersion = try run(executableURL, arguments: ["version"]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -13,6 +13,18 @@
             let releaseNotes = try XCTUnwrap(lines.first { $0.hasPrefix(prefix) }, output)
             let latestVersion = String(releaseNotes.dropFirst(prefix.count))
             XCTAssertFalse(latestVersion.isEmpty, output)
+
+            var request = try URLRequest(url: XCTUnwrap(URL(string: "https://github.com/agoodkind/periphery/releases/latest")))
+            request.httpMethod = "HEAD"
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
+            XCTAssertEqual(httpResponse.statusCode, 200)
+            let finalURL = try XCTUnwrap(httpResponse.url)
+            let finalPath = try XCTUnwrap(URLComponents(url: finalURL, resolvingAgainstBaseURL: false)?.percentEncodedPath)
+            let pathPrefix = "/agoodkind/periphery/releases/tag/"
+            XCTAssertTrue(finalPath.hasPrefix(pathPrefix), finalPath)
+            let encodedTag = String(finalPath.dropFirst(pathPrefix.count))
+            XCTAssertEqual(latestVersion, encodedTag.removingPercentEncoding)
 
             if installedVersion == "development" {
                 XCTAssertTrue(lines.contains("This development build does not have a release version. The latest fork release is \(latestVersion)."), output)
