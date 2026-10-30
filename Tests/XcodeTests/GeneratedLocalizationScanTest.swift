@@ -81,6 +81,14 @@ final class GeneratedLocalizationScanTest: XCTestCase {
                 }
             }
 
+            """
+            try source.write(to: sourceURL, atomically: true, encoding: .utf8)
+
+            let helperURL = temporaryURL.appendingPathComponent("SwiftUIProject/LocalizationUsage.swift")
+            let originalHelper = try String(contentsOf: helperURL, encoding: .utf8)
+            let helper = """
+
+
             @available(iOS 16, *)
             extension LocalizedStringResource {
                 static var handWritten: LocalizedStringResource {
@@ -88,7 +96,7 @@ final class GeneratedLocalizationScanTest: XCTestCase {
                 }
             }
             """
-            try source.write(to: sourceURL, atomically: true, encoding: .utf8)
+            try (originalHelper + helper).write(to: helperURL, atomically: true, encoding: .utf8)
 
             let catalogURL = temporaryURL.appendingPathComponent("SwiftUIProject/Localizable.xcstrings")
             let catalog = #"{"sourceLanguage":"en","strings":{"generated.used":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Used"}}}},"generated.unused":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"Unused"}}}},"number.of.items %lld":{"extractionState":"manual","localizations":{"en":{"stringUnit":{"state":"translated","value":"%lld items"}}}},"handwritten.used":{}},"version":"1.0"}"#
@@ -121,6 +129,14 @@ final class GeneratedLocalizationScanTest: XCTestCase {
             XCTAssertFalse(scan.output.contains("Unused localized string 'handwritten.used'"), scan.output)
             XCTAssertTrue(scan.output.contains("Unused localized string 'generated.unused'"), scan.output)
             XCTAssertTrue(scan.output.contains("DeadPreviewedView"), scan.output)
+
+            let unknownOwner = try run(
+                executable: executableURL,
+                arguments: scanArguments + ["--index-exclude", "**/LocalizationUsage.swift", "--quiet"]
+            )
+            XCTAssertEqual(unknownOwner.status, 0, unknownOwner.output)
+            XCTAssertTrue(unknownOwner.output.contains("cannot identify the catalog"), unknownOwner.output)
+            XCTAssertTrue(unknownOwner.output.contains("retained all catalog keys"), unknownOwner.output)
 
             let generatedURL = derivedDataURL.appendingPathComponent(
                 "Build/Intermediates.noindex/SwiftUIProject.build/Debug-iphoneos/SwiftUIProject.build/DerivedSources/GeneratedStringSymbols_Localizable.swift"

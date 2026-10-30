@@ -134,7 +134,11 @@
                 logger: logger,
                 configuration: configuration
             )
-            let sourceFiles = try collector.collect(includeGeneratedStringSymbols: !configuration.disableUnusedLocalizedStringAnalysis)
+            let sourceFiles: [SourceFile: [IndexUnit]] = if configuration.disableUnusedLocalizedStringAnalysis {
+                try collector.collect()
+            } else {
+                try collector.collectIncludingGeneratedStringSymbols()
+            }
             let infoPlistPaths = targets.flatMapSet { $0.files(kind: .infoPlist) }
             let xibPaths = targets.flatMapSet { $0.files(kind: .interfaceBuilder) }
             let xcDataModelPaths = targets.flatMapSet { $0.files(kind: .xcDataModel) }

@@ -90,13 +90,33 @@ public struct IndexPipeline {
             ).perform()
         }
 
+        let missingOwnership = graph.withLock { graph in
+            graph.hasUnresolvedLocalizedSymbol && !graph.declarations(ofKind: .localizedString).isEmpty
+        }
+        if missingOwnership {
+            logger.warnAlways("Periphery cannot identify the catalog for a referenced localized string symbol. It retained all catalog keys. Include the symbol's source in the scan.")
+        }
+
         graph.withLock { $0.indexingComplete() }
         return scannedLOC
     }
 
-    private func generatedSymbolsByUsr(_ files: [SourceFile: [IndexUnit]]) throws -> (keys: [String: Set<String>], modules: [String: Set<String>]) {
-        var keysByUsr: [String: Set<String>] = [:]
-        var modulesByUsr: [String: Set<String>] = [:]
+    private struct GeneratedSymbols {
+        private(set) var keys: [String: Set<String>] = [:]
+        private(set) var modules: [String: Set<String>] = [:]
+
+        mutating func add(usr: String, key: String?, module: String) {
+            if let key {
+                keys[usr, default: []].insert(key)
+            }
+            if !module.isEmpty {
+                modules[usr, default: []].insert(module)
+            }
+        }
+    }
+
+    private func generatedSymbolsByUsr(_ files: [SourceFile: [IndexUnit]]) throws -> GeneratedSymbols {
+        var symbols = GeneratedSymbols()
         for (file, units) in files {
             let keysByLine: [Int: String]
             if file.path.exists {
@@ -114,16 +134,10 @@ public struct IndexPipeline {
                           [.staticProperty, .staticMethod].contains(occurrence.symbol.kind)
                     else { return }
 
-                    let usr = occurrence.symbol.usr
-                    if let key = keysByLine[occurrence.location.line] {
-                        keysByUsr[usr, default: []].insert(key)
-                    }
-                    if !unit.unit.moduleName.isEmpty {
-                        modulesByUsr[usr, default: []].insert(unit.unit.moduleName)
-                    }
+                    symbols.add(usr: occurrence.symbol.usr, key: keysByLine[occurrence.location.line], module: unit.unit.moduleName)
                 })
             }
         }
-        return (keysByUsr, modulesByUsr)
+        return symbols
     }
 }
