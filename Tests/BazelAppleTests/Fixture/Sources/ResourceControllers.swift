@@ -1,9 +1,9 @@
 import AppKit
 
 class FirstController: NSViewController {
-    @IBAction func firstAction(_ sender: Any) {}
+    @IBAction func firstAction(_: Any) {}
 }
 
 class SecondController: NSViewController {
-    @IBAction func secondAction(_ sender: Any) {}
+    @IBAction func secondAction(_: Any) {}
 }
