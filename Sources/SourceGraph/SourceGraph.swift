@@ -27,6 +27,7 @@ public final class SourceGraph {
     public private(set) var usedLocalizedStringKeys: Set<String> = []
     public private(set) var localizedStringKeyFormats: Set<[String]> = []
     public private(set) var unresolvedLocalizedStringKeyPrefixesByModule: [String: Set<String>] = [:]
+    public private(set) var hasUnresolvedLocalizedSymbol = false
 
     private var indexedModules: Set<String> = []
     private var unindexedExportedModules: Set<String> = []
@@ -248,6 +249,10 @@ public final class SourceGraph {
         for module in modules {
             unresolvedLocalizedStringKeyPrefixesByModule[module, default: []].formUnion(prefixes)
         }
+    }
+
+    public func markUnresolvedLocalizedSymbol() {
+        hasUnresolvedLocalizedSymbol = true
     }
 
     func markUsed(_ declaration: Declaration) {

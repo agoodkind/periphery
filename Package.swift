@@ -170,7 +170,7 @@ var targets: [PackageDescription.Target] = [
                 .target(name: "TestShared"),
                 .target(name: "PeripheryKit"),
             ],
-            exclude: ["UIKitProject", "SwiftUIProject", "SyncedGroupProject"]
+            exclude: ["UIKitProject", "SwiftUIProject", "SyncedGroupProject", "GeneratedSymbolsProject"]
         ),
     ])
 #endif

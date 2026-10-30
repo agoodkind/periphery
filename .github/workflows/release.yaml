@@ -68,6 +68,15 @@ jobs:
           KEYCHAIN_PATH: ${{ runner.temp }}/release.keychain-db
         run: swift workflow-tools/.github/scripts/release.swift import-certificate
 
+      - name: Create source archive
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
+        env:
+          SOURCE_SHA: ${{ steps.prepare.outputs.source_sha }}
+        run: swift workflow-tools/.github/scripts/release.swift source-archive
+
+      - uses: bazel-contrib/setup-bazel@9f0750536d239de15c1f8528e2ba6c17a99fb752
+        if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
+
       - name: Build arm64 executable
         if: steps.prepare.outputs.release == 'true' && steps.published.outputs.exists != 'true'
         env:
@@ -125,6 +134,8 @@ jobs:
       VERSION: ${{ needs.build.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download release input
         uses: actions/download-artifact@v4
