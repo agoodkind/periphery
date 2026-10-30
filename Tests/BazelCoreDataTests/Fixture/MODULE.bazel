@@ -1,0 +1,13 @@
+module(name = "periphery_coredata_fixture")
+
+bazel_dep(name = "periphery", version = "3.8.0", dev_dependency = True)
+
+bazel_dep(name = "rules_swift", version = "3.5.0", max_compatibility_level = 3)
+bazel_dep(name = "rules_apple", version = "4.5.2")
+
+local_path_override(
+    module_name = "periphery",
+    path = "../../..",
+)
+
+use_repo(use_extension("@periphery//bazel:generated.bzl", "generated"), "periphery_generated")

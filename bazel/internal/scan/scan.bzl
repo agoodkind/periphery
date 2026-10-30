@@ -107,13 +107,12 @@ def _scan_inputs_aspect_impl(target, ctx):
             if hasattr(info, "datamodels"):
                 # 'datamodels' contains both .xcdatamodel and .xcmappingmodel files.
                 # We separate them because Periphery uses a different parser for each.
-                resources = info.datamodels[0][2].to_list()
-
-                for resource in resources:
-                    if ".xcdatamodel" in resource.path:
-                        xcdatamodels.append(resource)
-                    elif ".xcmappingmodel" in resource.path:
-                        xcmappingmodels.append(resource)
+                for bucket in info.datamodels:
+                    for resource in bucket[2].to_list():
+                        if ".xcdatamodel" in resource.path and resource.basename == "contents":
+                            xcdatamodels.append(resource)
+                        elif ".xcmappingmodel" in resource.path and resource.basename == "xcmapping.xml":
+                            xcmappingmodels.append(resource)
 
             if hasattr(info, "strings"):
                 for resource in info.strings[0][2].to_list():

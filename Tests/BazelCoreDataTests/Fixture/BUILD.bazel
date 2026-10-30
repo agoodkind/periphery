@@ -1,0 +1,33 @@
+load("@rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+apple_resource_bundle(
+    name = "first_model",
+    resources = glob([
+        "First.xcdatamodeld/**",
+        "ModelMapping.xcmappingmodel/**",
+    ]),
+)
+
+apple_resource_bundle(
+    name = "second_model",
+    resources = glob(["Second.xcdatamodeld/**"]),
+)
+
+swift_library(
+    name = "app_sources",
+    srcs = glob(["Sources/*.swift"]),
+    data = [
+        ":first_model",
+        ":second_model",
+    ],
+)
+
+macos_application(
+    name = "app",
+    bundle_id = "io.goodkind.periphery.coredatafixture",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "13.0",
+    deps = [":app_sources"],
+)

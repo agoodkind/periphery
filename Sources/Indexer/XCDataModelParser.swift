@@ -4,28 +4,36 @@ import SourceGraph
 import SystemPackage
 
 final class XCDataModelParser {
-    private let path: FilePath
+    private let input: ModelInput
 
-    required init(path: FilePath) {
-        self.path = path
+    required init(input: ModelInput) {
+        self.input = input
     }
 
     func parse() throws -> [AssetReference] {
-        try FileManager.default.contentsOfDirectory(atPath: path.string).flatMap { subPath -> [AssetReference] in
-            let modelPath = path.appending(subPath)
-            guard modelPath.extension == "xcdatamodel" else { return [] }
+        switch input {
+        case let .file(path):
+            try parseContents(at: path)
+        case let .directory(path):
+            try FileManager.default.contentsOfDirectory(atPath: path.string).flatMap { subPath -> [AssetReference] in
+                let modelPath = path.appending(subPath)
+                guard modelPath.extension?.lowercased() == "xcdatamodel" else { return [] }
 
-            let contentsPath = modelPath.appending("contents")
-            guard let data = FileManager.default.contents(atPath: contentsPath.string) else { return [] }
-
-            let structure = try AEXMLDocument(xml: data)
-            return references(from: structure.root).map {
-                AssetReference(absoluteName: $0, source: .xcDataModel)
+                return try parseContents(at: modelPath.appending("contents"))
             }
         }
     }
 
     // MARK: - Private
+
+    private func parseContents(at contentsPath: FilePath) throws -> [AssetReference] {
+        let data = try Data(contentsOf: URL(fileURLWithPath: contentsPath.string))
+
+        let structure = try AEXMLDocument(xml: data)
+        return references(from: structure.root).map {
+            AssetReference(absoluteName: $0, source: .xcDataModel)
+        }
+    }
 
     private func references(from element: AEXMLElement) -> [String] {
         var names: [String] = []
