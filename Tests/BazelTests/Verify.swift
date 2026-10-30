@@ -13,6 +13,8 @@ struct Fixture {
     let unusedFiles: [String]
     let expectedNames: [String]
     let catalog: String?
+    let targetedQuery: String?
+    let targetedNames: [String]
 }
 
 enum VerificationError: Error, CustomStringConvertible {
@@ -43,12 +45,16 @@ func run(_ arguments: [String], in directory: URL, log: URL) throws -> Int32 {
     return process.terminationStatus
 }
 
-func scan(in directory: URL, results: URL, log: URL) throws -> Int32 {
-    try run(
-        [
-            "run", "@periphery", "--", "scan", "--bazel", "--strict",
-            "--format", "json", "--disable-update-check", "--write-results", results.path,
-        ],
+func scan(in directory: URL, results: URL, log: URL, query: String? = nil) throws -> Int32 {
+    var arguments = [
+        "run", "@periphery", "--", "scan", "--bazel", "--strict",
+        "--format", "json", "--disable-update-check", "--write-results", results.path,
+    ]
+    if let query {
+        arguments.append(contentsOf: ["--bazel-query", query])
+    }
+    return try run(
+        arguments,
         in: directory,
         log: log
     )
@@ -90,7 +96,9 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
     let cleanLog = temporary.appendingPathComponent("clean.log")
     let catalogLog = temporary.appendingPathComponent("catalog.log")
     let cleanupLog = temporary.appendingPathComponent("cleanup.log")
-    for log in [unusedLog, cleanLog, catalogLog, cleanupLog] {
+    let targetedLog = temporary.appendingPathComponent("targeted.log")
+    let targetedCleanLog = temporary.appendingPathComponent("targeted-clean.log")
+    for log in [unusedLog, cleanLog, catalogLog, cleanupLog, targetedLog, targetedCleanLog] {
         guard manager.createFile(atPath: log.path, contents: nil) else {
             throw VerificationError.failed("Could not create \(log.path)")
         }
@@ -107,6 +115,17 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
 
         report("The strict scan returned 1 and reported \(unusedNames).")
 
+        if let query = fixtureSpec.targetedQuery {
+            let results = temporary.appendingPathComponent("targeted.json")
+            let status = try scan(in: fixture, results: results, log: targetedLog, query: query)
+            let found = try names(in: results)
+            guard status == 1, found == fixtureSpec.targetedNames else {
+                throw VerificationError.failed("Expected exit 1 and \(fixtureSpec.targetedNames); received exit \(status), \(found). Log: \(targetedLog.path)")
+            }
+
+            report("The app-only scan returned 1 and reported \(found).")
+        }
+
         for path in fixtureSpec.unusedFiles {
             try manager.removeItem(at: fixture.appendingPathComponent(path))
         }
@@ -119,6 +138,17 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
         }
 
         report("The clean scan returned 0 without findings.")
+
+        if let query = fixtureSpec.targetedQuery {
+            let results = temporary.appendingPathComponent("targeted-clean.json")
+            let status = try scan(in: fixture, results: results, log: targetedCleanLog, query: query)
+            let found = try names(in: results)
+            guard status == 0, found.isEmpty else {
+                throw VerificationError.failed("Expected app-only exit 0 without findings; received exit \(status), \(found). Log: \(targetedCleanLog.path)")
+            }
+
+            report("The app-only clean scan returned 0 without findings.")
+        }
 
         if let catalog = fixtureSpec.catalog {
             let catalogPath = fixture.appendingPathComponent(catalog)
@@ -159,15 +189,19 @@ do {
             files: ["MODULE.bazel", "BUILD.bazel", "Sources"],
             unusedFiles: ["Sources/Unused.swift"],
             expectedNames: ["unusedGreeting()"],
-            catalog: nil
+            catalog: nil,
+            targetedQuery: nil,
+            targetedNames: []
         ),
         Fixture(
             name: "the macOS and iOS applications",
             source: repository.appendingPathComponent("Tests/BazelAppleTests/Fixture"),
-            files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Private", "IOS", "Info.plist", "Info-iOS.plist", "Localizable.xcstrings"],
-            unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift", "IOS/Unused.swift"],
-            expectedNames: ["unusedGreeting()", "unusedIOSGreeting()", "unusedPrivateGreeting()"],
-            catalog: "Localizable.xcstrings"
+            files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Private", "IOS", "EmbeddedFramework", "EmbeddedService", "Info.plist", "Info-iOS.plist", "Localizable.xcstrings"],
+            unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift", "IOS/Unused.swift", "EmbeddedFramework/Unused.swift", "EmbeddedService/Unused.swift"],
+            expectedNames: ["unusedEmbeddedFrameworkControl()", "unusedEmbeddedServiceControl()", "unusedGreeting()", "unusedIOSGreeting()", "unusedPrivateGreeting()"],
+            catalog: "Localizable.xcstrings",
+            targetedQuery: "//:app",
+            targetedNames: ["unusedEmbeddedFrameworkControl()", "unusedEmbeddedServiceControl()", "unusedGreeting()", "unusedPrivateGreeting()"]
         ),
     ]
     for fixture in fixtures {

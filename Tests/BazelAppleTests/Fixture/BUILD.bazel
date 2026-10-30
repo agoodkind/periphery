@@ -1,5 +1,5 @@
 load("@rules_apple//apple:ios.bzl", "ios_application")
-load("@rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_apple//apple:macos.bzl", "macos_application", "macos_framework", "macos_xpc_service")
 load("@rules_swift//swift:swift.bzl", "swift_library")
 
 swift_library(
@@ -14,12 +14,40 @@ swift_library(
     private_deps = [":private_helper"],
 )
 
+swift_library(
+    name = "embedded_framework_sources",
+    srcs = glob(["EmbeddedFramework/*.swift"]),
+)
+
+macos_framework(
+    name = "embedded_framework",
+    bundle_id = "io.goodkind.periphery.fixture.framework",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "13.0",
+    deps = [":embedded_framework_sources"],
+)
+
+swift_library(
+    name = "embedded_service_sources",
+    srcs = glob(["EmbeddedService/*.swift"]),
+)
+
+macos_xpc_service(
+    name = "embedded_service",
+    bundle_id = "io.goodkind.periphery.fixture.service",
+    infoplists = ["Info.plist"],
+    minimum_os_version = "13.0",
+    deps = [":embedded_service_sources"],
+)
+
 macos_application(
     name = "app",
     bundle_id = "io.goodkind.periphery.fixture",
+    frameworks = [":embedded_framework"],
     infoplists = ["Info.plist"],
     minimum_os_version = "13.0",
     resources = ["Localizable.xcstrings"],
+    xpc_services = [":embedded_service"],
     deps = [":app_sources"],
 )
 
@@ -31,7 +59,10 @@ swift_library(
 ios_application(
     name = "ios_app",
     bundle_id = "io.goodkind.periphery.iosfixture",
-    families = ["iphone", "ipad"],
+    families = [
+        "iphone",
+        "ipad",
+    ],
     infoplists = ["Info-iOS.plist"],
     minimum_os_version = "17.0",
     deps = [":ios_sources"],
