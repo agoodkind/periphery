@@ -31,3 +31,44 @@ public struct IndexPlan {
         self.nonMainBundleCatalogs = nonMainBundleCatalogs
     }
 }
+
+enum ModelInput {
+    enum Kind {
+        case data
+        case mapping
+    }
+
+    enum ValidationError: Error, CustomStringConvertible {
+        case invalidPath(FilePath)
+
+        var description: String {
+            switch self {
+            case let .invalidPath(path): "Invalid model path: \(path.string)"
+            }
+        }
+    }
+
+    case directory(FilePath)
+    case file(FilePath)
+
+    init(path: FilePath, kind: Kind) throws {
+        switch kind {
+        case .data:
+            if path.extension == "xcdatamodeld" {
+                self = .directory(path)
+            } else if path.lastComponent?.string == "contents", path.removingLastComponent().extension == "xcdatamodel" {
+                self = .file(path)
+            } else {
+                throw ValidationError.invalidPath(path)
+            }
+        case .mapping:
+            if path.extension == "xcmappingmodel" {
+                self = .directory(path)
+            } else if path.lastComponent?.string == "xcmapping.xml", path.removingLastComponent().extension == "xcmappingmodel" {
+                self = .file(path)
+            } else {
+                throw ValidationError.invalidPath(path)
+            }
+        }
+    }
+}

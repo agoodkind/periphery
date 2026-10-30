@@ -29,7 +29,8 @@ final class XCDataModelIndexer: Indexer {
 
             let elapsed = try Benchmark.measure {
                 do {
-                    let refs = try XCDataModelParser(path: path)
+                    let input = try ModelInput(path: path, kind: .data)
+                    let refs = try XCDataModelParser(input: input)
                         .parse()
                     self.graph.withLock { graph in
                         refs.forEach { graph.add($0) }

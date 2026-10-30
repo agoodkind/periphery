@@ -14,6 +14,7 @@ struct Fixture {
     let expectedNames: [String]
     let catalog: String?
     let setupTag: String?
+    let testMissingModelFiles: Bool
 }
 
 enum VerificationError: Error, CustomStringConvertible {
@@ -198,6 +199,38 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
 
         report("The clean scan returned 0 without findings.")
 
+        if fixtureSpec.testMissingModelFiles {
+            for (kind, path) in [
+                ("xcdatamodels", "Missing.xcdatamodeld/Missing.xcdatamodel/contents"),
+                ("xcmappingmodels", "Missing.xcmappingmodel/xcmapping.xml"),
+            ] {
+                let missingPath = temporary.appendingPathComponent(path).path
+                let config: [String: [String]] = [
+                    "indexstores": [], "plists": [], "xibs": [],
+                    "xcdatamodels": kind == "xcdatamodels" ? [missingPath] : [],
+                    "xcmappingmodels": kind == "xcmappingmodels" ? [missingPath] : [],
+                    "test_targets": [],
+                ]
+                let configPath = temporary.appendingPathComponent("\(kind).json")
+                try JSONSerialization.data(withJSONObject: config).write(to: configPath)
+                let log = temporary.appendingPathComponent("\(kind).log")
+                guard manager.createFile(atPath: log.path, contents: nil) else {
+                    throw VerificationError.failed("Could not create \(log.path)")
+                }
+
+                let status = try run(
+                    ["run", "@periphery", "--", "scan", "--generic-project-config", configPath.path, "--disable-update-check"],
+                    in: fixture,
+                    log: log
+                )
+                let output = try String(contentsOf: log, encoding: .utf8)
+                guard status == 1, output.contains("failedToParse"), output.contains(missingPath) else {
+                    throw VerificationError.failed("The scan must report the missing model file \(missingPath). Log: \(log.path)")
+                }
+            }
+            report("The scan reported both missing model files.")
+        }
+
         if let catalog = fixtureSpec.catalog {
             let catalogPath = fixture.appendingPathComponent(catalog)
             try "{".write(to: catalogPath, atomically: true, encoding: .utf8)
@@ -238,7 +271,8 @@ do {
             unusedFiles: ["Sources/Unused.swift"],
             expectedNames: ["unusedGreeting()"],
             catalog: nil,
-            setupTag: "3.9.3-agoodkind.1"
+            setupTag: "3.9.3-agoodkind.1",
+            testMissingModelFiles: false
         ),
         Fixture(
             name: "the macOS and iOS applications",
@@ -247,7 +281,8 @@ do {
             unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift", "IOS/Unused.swift"],
             expectedNames: ["unusedGreeting()", "unusedIOSGreeting()", "unusedPrivateGreeting()"],
             catalog: "Localizable.xcstrings",
-            setupTag: nil
+            setupTag: nil,
+            testMissingModelFiles: false
         ),
         Fixture(
             name: "the macOS application with Core Data models",
@@ -256,7 +291,8 @@ do {
             unusedFiles: ["Sources/Unused.swift"],
             expectedNames: ["unusedGreeting()"],
             catalog: nil,
-            setupTag: nil
+            setupTag: nil,
+            testMissingModelFiles: true
         ),
     ]
     for fixture in fixtures {

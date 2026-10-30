@@ -5,6 +5,10 @@ import SourceGraph
 import SystemPackage
 
 final class XCMappingModelIndexer: Indexer {
+    enum XCMappingModelError: Error {
+        case failedToParse(path: FilePath, underlyingError: Error)
+    }
+
     private let files: Set<FilePath>
     private let graph: SourceGraphMutex
     private let logger: ContextualLogger
@@ -24,10 +28,14 @@ final class XCMappingModelIndexer: Indexer {
             guard let self else { return }
 
             let elapsed = try Benchmark.measure {
-                let refs = try XCMappingModelParser(path: path)
-                    .parse()
-                self.graph.withLock { graph in
-                    refs.forEach { graph.add($0) }
+                do {
+                    let input = try ModelInput(path: path, kind: .mapping)
+                    let refs = try XCMappingModelParser(input: input).parse()
+                    self.graph.withLock { graph in
+                        refs.forEach { graph.add($0) }
+                    }
+                } catch {
+                    throw XCMappingModelError.failedToParse(path: path, underlyingError: error)
                 }
             }
 
