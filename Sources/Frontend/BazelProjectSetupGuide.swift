@@ -29,18 +29,7 @@ final class BazelProjectSetupGuide: SetupGuideHelpers, SetupGuide {
             tag = PeripheryVersion
         }
 
-        guard !tag.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 || $0.value == 92 }) else {
-            throw PeripheryError.usageError("Invalid fork release tag: Git tag names cannot contain control characters or backslashes.")
-        }
-
-        let validation = Process()
-        validation.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        validation.arguments = ["git", "check-ref-format", "refs/tags/\(tag)"]
-        try validation.run()
-        validation.waitUntilExit()
-        guard validation.terminationStatus == 0 else {
-            throw PeripheryError.usageError("Invalid fork release tag: Git tag names must use valid ref syntax.")
-        }
+        try validateTag(tag)
 
         let escapedTag = tag.replacingOccurrences(of: "\"", with: "\\\"")
         print(logger.colorize("\nAdd the following snippet to your MODULE.bazel file:", .bold))
@@ -61,5 +50,20 @@ final class BazelProjectSetupGuide: SetupGuideHelpers, SetupGuide {
 
     var commandLineOptions: [String] {
         ["--bazel"]
+    }
+
+    private func validateTag(_ tag: String) throws {
+        guard !tag.unicodeScalars.contains(where: { $0.value == 0 }) else {
+            throw PeripheryError.usageError("Invalid fork release tag: Git tag names cannot contain a NUL character.")
+        }
+
+        let validation = Process()
+        validation.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        validation.arguments = ["git", "check-ref-format", "refs/tags/\(tag)"]
+        try validation.run()
+        validation.waitUntilExit()
+        guard validation.terminationStatus == 0 else {
+            throw PeripheryError.usageError("Invalid fork release tag: Git tag names must use valid ref syntax.")
+        }
     }
 }

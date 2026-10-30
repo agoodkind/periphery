@@ -22,7 +22,7 @@
             defer { try? FileManager.default.removeItem(at: directory) }
             try "module(name = \"consumer\")\n".write(to: directory.appendingPathComponent("MODULE.bazel"), atomically: true, encoding: .utf8)
 
-            for tag in ["bad\ttag", "bad\\tag"] {
+            for tag in ["bad\ttag", "bad\\tag", "bad\0tag"] {
                 let process = Process()
                 process.executableURL = executableURL
                 process.arguments = ["scan", "--setup", "--disable-update-check"]

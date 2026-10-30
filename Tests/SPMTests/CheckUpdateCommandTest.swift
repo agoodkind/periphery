@@ -35,7 +35,10 @@
             process.waitUntilExit()
 
             let output = try XCTUnwrap(String(bytes: outputData, encoding: .utf8))
-            XCTAssertEqual(process.terminationStatus, 0, output)
+            guard process.terminationStatus == 0 else {
+                throw NSError(domain: "CheckUpdateCommandTest", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Command \(arguments.joined(separator: " ")) exited with status \(process.terminationStatus): \(output)"])
+            }
+
             return output
         }
     }
