@@ -7,7 +7,11 @@ final class XCMappingModelParser {
     private let path: FilePath
 
     required init(path: FilePath) {
-        self.path = path.appending("xcmapping.xml")
+        if path.lastComponent?.string == "xcmapping.xml" {
+            self.path = path
+        } else {
+            self.path = path.appending("xcmapping.xml")
+        }
     }
 
     func parse() throws -> [AssetReference] {
