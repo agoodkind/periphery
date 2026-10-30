@@ -26,6 +26,7 @@ _TRANSITIVE_ATTRS = [
     "extension",
     "extensions",
     "plugins",
+    "private_deps",
     "swift_target",
     "watch_application",
 ]
@@ -116,6 +117,10 @@ def _scan_inputs_aspect_impl(target, ctx):
                 for resource in info.strings[0][2].to_list():
                     if resource.path.endswith(".xcstrings"):
                         xcstrings.append(resource)
+
+            if hasattr(info, "xcstrings") and info.xcstrings:
+                for bucket in info.xcstrings:
+                    xcstrings.extend(bucket[2].to_list())
 
     providers = _periphery_info_providers(ctx.rule.attr)
 
