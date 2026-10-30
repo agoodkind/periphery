@@ -6,6 +6,15 @@ struct Finding: Decodable {
     let name: String
 }
 
+struct Fixture {
+    let name: String
+    let source: URL
+    let files: [String]
+    let unusedFiles: [String]
+    let expectedNames: [String]
+    let catalog: String?
+}
+
 enum VerificationError: Error, CustomStringConvertible {
     case failed(String)
 
@@ -49,18 +58,15 @@ func names(in results: URL) throws -> [String] {
     try JSONDecoder().decode([Finding].self, from: Data(contentsOf: results)).map(\.name).sorted()
 }
 
-func verify() throws {
+func verify(_ fixtureSpec: Fixture, repository: URL) throws {
     let manager = FileManager.default
-    let testDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-    let repository = testDirectory.deletingLastPathComponent().deletingLastPathComponent()
     let temporary = manager.temporaryDirectory.appendingPathComponent("periphery-bazel-\(UUID().uuidString)")
     let fixture = temporary.appendingPathComponent("Fixture")
     try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
     try manager.createDirectory(at: fixture, withIntermediateDirectories: true)
-    let fixtureSource = testDirectory.appendingPathComponent("Fixture")
-    for path in ["MODULE.bazel", "BUILD.bazel", "Sources"] {
+    for path in fixtureSpec.files {
         try manager.copyItem(
-            at: fixtureSource.appendingPathComponent(path),
+            at: fixtureSpec.source.appendingPathComponent(path),
             to: fixture.appendingPathComponent(path)
         )
     }
@@ -82,8 +88,9 @@ func verify() throws {
 
     let unusedLog = temporary.appendingPathComponent("unused.log")
     let cleanLog = temporary.appendingPathComponent("clean.log")
+    let catalogLog = temporary.appendingPathComponent("catalog.log")
     let cleanupLog = temporary.appendingPathComponent("cleanup.log")
-    for log in [unusedLog, cleanLog, cleanupLog] {
+    for log in [unusedLog, cleanLog, catalogLog, cleanupLog] {
         guard manager.createFile(atPath: log.path, contents: nil) else {
             throw VerificationError.failed("Could not create \(log.path)")
         }
@@ -91,16 +98,18 @@ func verify() throws {
 
     do {
         let unusedResults = temporary.appendingPathComponent("unused.json")
-        report("Scanning the fixture with its unused declaration.")
+        report("Scanning \(fixtureSpec.name) with its unused declaration.")
         let unusedStatus = try scan(in: fixture, results: unusedResults, log: unusedLog)
         let unusedNames = try names(in: unusedResults)
-        guard unusedStatus == 1, unusedNames == ["unusedGreeting()"] else {
-            throw VerificationError.failed("Expected exit 1 and only unusedGreeting(); received exit \(unusedStatus), \(unusedNames). Log: \(unusedLog.path)")
+        guard unusedStatus == 1, unusedNames == fixtureSpec.expectedNames else {
+            throw VerificationError.failed("Expected exit 1 and \(fixtureSpec.expectedNames); received exit \(unusedStatus), \(unusedNames). Log: \(unusedLog.path)")
         }
 
-        report("The strict scan returned 1 and reported only unusedGreeting().")
+        report("The strict scan returned 1 and reported \(unusedNames).")
 
-        try manager.removeItem(at: fixture.appendingPathComponent("Sources/Unused.swift"))
+        for path in fixtureSpec.unusedFiles {
+            try manager.removeItem(at: fixture.appendingPathComponent(path))
+        }
         let cleanResults = temporary.appendingPathComponent("clean.json")
         report("Scanning the fixture after removing its unused declaration.")
         let cleanStatus = try scan(in: fixture, results: cleanResults, log: cleanLog)
@@ -110,6 +119,19 @@ func verify() throws {
         }
 
         report("The clean scan returned 0 without findings.")
+
+        if let catalog = fixtureSpec.catalog {
+            let catalogPath = fixture.appendingPathComponent(catalog)
+            try "{".write(to: catalogPath, atomically: true, encoding: .utf8)
+            let catalogResults = temporary.appendingPathComponent("catalog.json")
+            let catalogStatus = try scan(in: fixture, results: catalogResults, log: catalogLog)
+            let catalogOutput = try String(contentsOf: catalogLog, encoding: .utf8)
+            guard catalogStatus != 0, catalogOutput.contains("Failed to read String Catalog") else {
+                throw VerificationError.failed("The scan must report the invalid String Catalog. Log: \(catalogLog.path)")
+            }
+
+            report("The scan reported the invalid String Catalog.")
+        }
     } catch {
         let cleanupStatus = try run(["clean", "--expunge"], in: fixture, log: cleanupLog)
         if cleanupStatus != 0 {
@@ -128,7 +150,29 @@ func verify() throws {
 }
 
 do {
-    try verify()
+    let tests = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    let repository = tests.deletingLastPathComponent().deletingLastPathComponent()
+    let fixtures = [
+        Fixture(
+            name: "the Swift executable",
+            source: tests.appendingPathComponent("Fixture"),
+            files: ["MODULE.bazel", "BUILD.bazel", "Sources"],
+            unusedFiles: ["Sources/Unused.swift"],
+            expectedNames: ["unusedGreeting()"],
+            catalog: nil
+        ),
+        Fixture(
+            name: "the macOS and iOS applications",
+            source: repository.appendingPathComponent("Tests/BazelAppleTests/Fixture"),
+            files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Private", "IOS", "Info.plist", "Info-iOS.plist", "Localizable.xcstrings"],
+            unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift", "IOS/Unused.swift"],
+            expectedNames: ["unusedGreeting()", "unusedIOSGreeting()", "unusedPrivateGreeting()"],
+            catalog: "Localizable.xcstrings"
+        ),
+    ]
+    for fixture in fixtures {
+        try verify(fixture, repository: repository)
+    }
 } catch {
     FileHandle.standardError.write(Data("\(error)\n".utf8))
     exit(1)
