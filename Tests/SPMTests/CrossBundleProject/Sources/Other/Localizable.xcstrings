@@ -1,0 +1,9 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "other.unused" : { },
+    "local.unused" : { },
+    "main.unused" : { }
+  },
+  "version" : "1.0"
+}

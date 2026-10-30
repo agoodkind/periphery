@@ -22,6 +22,7 @@ public struct IndexPipeline {
     }
 
     public func perform() throws -> Int {
+        graph.withLock { $0.addNonMainBundleCatalogs(plan.nonMainBundleCatalogs) }
         let generatedFiles = plan.sourceFiles.filter { file, _ in
             SourceFileCollector.isGeneratedStringSymbols(file.path)
         }
@@ -43,6 +44,10 @@ public struct IndexPipeline {
             for (usr, keys) in generatedKeys where !graph.references(to: usr).isEmpty {
                 graph.addUsedLocalizedStringKeys(keys)
             }
+        }
+
+        if !plan.xcStringsPaths.isEmpty, graph.withLock({ $0.unresolvedLocalizedStringKeyPrefixes.contains("") }) {
+            logger.warnAlways("A dynamic localized string lookup has an unknown bundle and lacks a literal prefix. Periphery cannot report unused String Catalog keys. Run with --verbose to locate the lookup.")
         }
 
         if !plan.plistPaths.isEmpty {

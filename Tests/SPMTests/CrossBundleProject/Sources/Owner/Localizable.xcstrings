@@ -1,0 +1,13 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "dynamic.used" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Dynamic value" } }
+      }
+    },
+    "owner.unused" : { },
+    "local.used" : { }
+  },
+  "version" : "1.0"
+}

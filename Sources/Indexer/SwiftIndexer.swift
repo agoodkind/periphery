@@ -381,21 +381,30 @@ final class SwiftIndexer: Indexer {
             calleeUsrsByPosition = [:]
 
             for unresolvedKey in visitor.unresolvedKeys {
+                let scope = switch unresolvedKey.bundleScope {
+                case .module: "modules \(sourceFile.modules.sorted().joined(separator: ", "))"
+                case .main: "catalogs that may belong to the main bundle"
+                case .unknown: "all modules"
+                }
                 logger.debug(
-                    "Unresolved localized string key at \(sourceFile.path.string):\(unresolvedKey.line):\(unresolvedKey.column), retaining catalog keys with prefix '\(unresolvedKey.prefix)' in modules \(sourceFile.modules.sorted().joined(separator: ", "))"
+                    "Unresolved localized string key at \(sourceFile.path.string):\(unresolvedKey.line):\(unresolvedKey.column), retaining catalog keys with prefix '\(unresolvedKey.prefix)' in \(scope)"
                 )
             }
 
             let formatSegments = visitor.keyFormatSegments
-            let unresolvedPrefixes = Set(visitor.unresolvedKeys.map(\.prefix))
+            let unresolvedPrefixes = Set(visitor.unresolvedKeys.filter { $0.bundleScope == .module && !sourceFile.modules.isEmpty }.map(\.prefix))
+            let mainPrefixes = Set(visitor.unresolvedKeys.filter { $0.bundleScope == .main }.map(\.prefix))
+            let globalPrefixes = Set(visitor.unresolvedKeys.filter { $0.bundleScope == .unknown || ($0.bundleScope == .module && sourceFile.modules.isEmpty) }.map(\.prefix))
             let modules = sourceFile.modules
 
-            guard !keys.isEmpty || !formatSegments.isEmpty || !unresolvedPrefixes.isEmpty || hasUnresolvedSymbol || !unresolvedSymbolModules.isEmpty else { return }
+            guard !keys.isEmpty || !formatSegments.isEmpty || !unresolvedPrefixes.isEmpty || !globalPrefixes.isEmpty || !mainPrefixes.isEmpty || hasUnresolvedSymbol || !unresolvedSymbolModules.isEmpty else { return }
 
             graph.withLock { graph in
                 graph.addUsedLocalizedStringKeys(keys)
                 graph.addLocalizedStringKeyFormats(formatSegments)
                 graph.addUnresolvedLocalizedStringKeyPrefixes(unresolvedPrefixes, modules: modules)
+                graph.addUnresolvedLocalizedStringKeyPrefixes(globalPrefixes)
+                graph.addMainBundleLocalizedStringKeyPrefixes(mainPrefixes)
                 graph.addUnresolvedLocalizedStringKeyPrefixes([""], modules: unresolvedSymbolModules)
                 if hasUnresolvedSymbol {
                     graph.markUnresolvedLocalizedSymbol()
