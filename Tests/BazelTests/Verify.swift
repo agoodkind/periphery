@@ -194,11 +194,11 @@ do {
             targetedNames: []
         ),
         Fixture(
-            name: "the macOS and iOS applications",
+            name: "the Apple applications",
             source: repository.appendingPathComponent("Tests/BazelAppleTests/Fixture"),
-            files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Private", "IOS", "EmbeddedFramework", "EmbeddedService", "Info.plist", "Info-iOS.plist", "Localizable.xcstrings"],
-            unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift", "IOS/Unused.swift", "EmbeddedFramework/Unused.swift", "EmbeddedService/Unused.swift"],
-            expectedNames: ["unusedEmbeddedFrameworkControl()", "unusedEmbeddedServiceControl()", "unusedGreeting()", "unusedIOSGreeting()", "unusedPrivateGreeting()"],
+            files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Private", "IOS", "TVOS", "WatchOS", "VisionOS", "EmbeddedFramework", "EmbeddedService", "Info.plist", "Info-iOS.plist", "Localizable.xcstrings"],
+            unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift", "IOS/Unused.swift", "TVOS/Unused.swift", "WatchOS/Unused.swift", "VisionOS/Unused.swift", "EmbeddedFramework/Unused.swift", "EmbeddedService/Unused.swift"],
+            expectedNames: ["unusedEmbeddedFrameworkControl()", "unusedEmbeddedServiceControl()", "unusedGreeting()", "unusedIOSGreeting()", "unusedPrivateGreeting()", "unusedTVOSControl()", "unusedVisionOSControl()", "unusedWatchOSControl()"],
             catalog: "Localizable.xcstrings",
             targetedQuery: "//:app",
             targetedNames: ["unusedEmbeddedFrameworkControl()", "unusedEmbeddedServiceControl()", "unusedGreeting()", "unusedPrivateGreeting()"]
