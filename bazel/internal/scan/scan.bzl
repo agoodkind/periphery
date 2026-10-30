@@ -25,10 +25,12 @@ _TRANSITIVE_ATTRS = [
     "deps",
     "extension",
     "extensions",
+    "frameworks",
     "plugins",
     "private_deps",
     "swift_target",
     "watch_application",
+    "xpc_services",
 ]
 
 def _periphery_info_providers(rule_attr):
