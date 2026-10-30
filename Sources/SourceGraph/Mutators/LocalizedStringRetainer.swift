@@ -9,7 +9,7 @@ import Shared
 /// It also retains the key when a module that owns the catalog contains an unresolved key call with a matching static
 /// prefix.
 /// It retains every key when the catalog does not have an owning module or an indexed localized symbol cannot be
-/// matched to its generated source.
+/// matched to a generating module. When the generated source is missing, it retains keys in the generating module.
 final class LocalizedStringRetainer: SourceGraphMutator {
     /// The regular expression matches one printf-style format specifier, such as `%@`, `%lld`, `%lf`, or `%1$@`.
     /// The Swift compiler writes these specifiers into catalog keys in place of interpolations.

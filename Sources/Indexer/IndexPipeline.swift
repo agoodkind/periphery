@@ -26,7 +26,8 @@ public struct IndexPipeline {
             SourceFileCollector.isGeneratedStringSymbols(file.path)
         }
         let sourceFiles = plan.sourceFiles.filter { generatedFiles[$0.key] == nil }
-        let generatedKeys = try generatedKeysByUsr(generatedFiles)
+        let generatedSymbols = try generatedSymbolsByUsr(generatedFiles)
+        let generatedKeys = generatedSymbols.keys
         logger.debug("Read \(generatedKeys.count) generated localization symbols from \(generatedFiles.count) files")
         let scannedLOC = try SwiftIndexer(
             sourceFiles: sourceFiles,
@@ -34,7 +35,8 @@ public struct IndexPipeline {
             logger: logger,
             configuration: configuration,
             swiftVersion: swiftVersion,
-            generatedStringSymbolUsrs: Set(generatedKeys.keys)
+            generatedStringSymbolUsrs: Set(generatedKeys.keys),
+            generatedStringSymbolModules: generatedSymbols.modules
         ).perform()
 
         graph.withLock { graph in
@@ -92,25 +94,36 @@ public struct IndexPipeline {
         return scannedLOC
     }
 
-    private func generatedKeysByUsr(_ files: [SourceFile: [IndexUnit]]) throws -> [String: Set<String>] {
+    private func generatedSymbolsByUsr(_ files: [SourceFile: [IndexUnit]]) throws -> (keys: [String: Set<String>], modules: [String: Set<String>]) {
         var keysByUsr: [String: Set<String>] = [:]
+        var modulesByUsr: [String: Set<String>] = [:]
         for (file, units) in files {
-            let source = try String(contentsOfFile: file.path.string, encoding: .utf8)
-            let keysByLine = GeneratedStringSymbols.keys(in: source)
+            let keysByLine: [Int: String]
+            if file.path.exists {
+                let source = try String(contentsOfFile: file.path.string, encoding: .utf8)
+                keysByLine = GeneratedStringSymbols.keys(in: source)
+            } else {
+                keysByLine = [:]
+            }
             for unit in units {
                 guard let recordName = unit.unit.recordName else { continue }
 
                 let record = try RecordReader(indexStore: unit.store, recordName: recordName)
                 record.forEach(occurrence: { occurrence in
                     guard occurrence.roles.contains(.definition),
-                          let key = keysByLine[occurrence.location.line],
                           [.staticProperty, .staticMethod].contains(occurrence.symbol.kind)
                     else { return }
 
-                    keysByUsr[occurrence.symbol.usr, default: []].insert(key)
+                    let usr = occurrence.symbol.usr
+                    if let key = keysByLine[occurrence.location.line] {
+                        keysByUsr[usr, default: []].insert(key)
+                    }
+                    if !unit.unit.moduleName.isEmpty {
+                        modulesByUsr[usr, default: []].insert(unit.unit.moduleName)
+                    }
                 })
             }
         }
-        return keysByUsr
+        return (keysByUsr, modulesByUsr)
     }
 }

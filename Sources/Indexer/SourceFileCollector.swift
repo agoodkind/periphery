@@ -44,7 +44,7 @@ public struct SourceFileCollector {
 
                     let generatedSymbols = includeGeneratedStringSymbols && Self.isGeneratedStringSymbols(file)
                     if !isExcluded(file) || generatedSymbols {
-                        guard file.exists else {
+                        guard file.exists || generatedSymbols else {
                             logger.debug("Source file does not exist: \(file.string)")
                             return nil
                         }

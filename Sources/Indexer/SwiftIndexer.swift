@@ -33,6 +33,7 @@ final class SwiftIndexer: Indexer {
     private let configuration: Configuration
     private let swiftVersion: SwiftVersion
     private let generatedStringSymbolUsrs: Set<String>
+    private let generatedStringSymbolModules: [String: Set<String>]
 
     required init(
         sourceFiles: [SourceFile: [IndexUnit]],
@@ -40,7 +41,8 @@ final class SwiftIndexer: Indexer {
         logger: ContextualLogger,
         configuration: Configuration,
         swiftVersion: SwiftVersion,
-        generatedStringSymbolUsrs: Set<String> = []
+        generatedStringSymbolUsrs: Set<String> = [],
+        generatedStringSymbolModules: [String: Set<String>] = [:]
     ) {
         self.sourceFiles = sourceFiles
         self.graph = graph
@@ -48,6 +50,7 @@ final class SwiftIndexer: Indexer {
         self.configuration = configuration
         self.swiftVersion = swiftVersion
         self.generatedStringSymbolUsrs = generatedStringSymbolUsrs
+        self.generatedStringSymbolModules = generatedStringSymbolModules
         super.init(configuration: configuration)
     }
 
@@ -61,7 +64,8 @@ final class SwiftIndexer: Indexer {
                 logger: logger,
                 configuration: configuration,
                 swiftVersion: swiftVersion,
-                generatedStringSymbolUsrs: generatedStringSymbolUsrs
+                generatedStringSymbolUsrs: generatedStringSymbolUsrs,
+                generatedStringSymbolModules: generatedStringSymbolModules
             )
         }
 
@@ -117,6 +121,7 @@ final class SwiftIndexer: Indexer {
         private var retainAllDeclarations: Bool
         private let swiftVersion: SwiftVersion
         private let generatedStringSymbolUsrs: Set<String>
+        private let generatedStringSymbolModules: [String: Set<String>]
 
         required init(
             sourceFile: SourceFile,
@@ -126,7 +131,8 @@ final class SwiftIndexer: Indexer {
             logger: ContextualLogger,
             configuration: Configuration,
             swiftVersion: SwiftVersion,
-            generatedStringSymbolUsrs: Set<String>
+            generatedStringSymbolUsrs: Set<String>,
+            generatedStringSymbolModules: [String: Set<String>]
         ) {
             self.sourceFile = sourceFile
             self.units = units
@@ -136,6 +142,7 @@ final class SwiftIndexer: Indexer {
             self.configuration = configuration
             self.swiftVersion = swiftVersion
             self.generatedStringSymbolUsrs = generatedStringSymbolUsrs
+            self.generatedStringSymbolModules = generatedStringSymbolModules
         }
 
         // swiftlint:disable nesting
@@ -365,7 +372,12 @@ final class SwiftIndexer: Indexer {
                 keys.formUnion(LocalizedStringCallResolver.usedKeys(for: callSite, calleeUsrs: calleeUsrs))
             }
 
-            let hasUnresolvedSymbol = !referencedLocalizedStringResourceUsrs.isSubset(of: generatedStringSymbolUsrs)
+            let possibleUnresolvedSymbolUsrs = referencedLocalizedStringResourceUsrs.subtracting(generatedStringSymbolUsrs)
+            let unresolvedSymbolUsrs = graph.withLock { graph in
+                possibleUnresolvedSymbolUsrs.filter { graph.declaration(withUsr: $0) == nil }
+            }
+            let hasUnresolvedSymbol = unresolvedSymbolUsrs.contains { generatedStringSymbolModules[$0, default: []].isEmpty }
+            let unresolvedSymbolModules = unresolvedSymbolUsrs.flatMapSet { generatedStringSymbolModules[$0, default: []] }
             calleeUsrsByPosition = [:]
 
             for unresolvedKey in visitor.unresolvedKeys {
@@ -378,12 +390,13 @@ final class SwiftIndexer: Indexer {
             let unresolvedPrefixes = Set(visitor.unresolvedKeys.map(\.prefix))
             let modules = sourceFile.modules
 
-            guard !keys.isEmpty || !formatSegments.isEmpty || !unresolvedPrefixes.isEmpty || hasUnresolvedSymbol else { return }
+            guard !keys.isEmpty || !formatSegments.isEmpty || !unresolvedPrefixes.isEmpty || hasUnresolvedSymbol || !unresolvedSymbolModules.isEmpty else { return }
 
             graph.withLock { graph in
                 graph.addUsedLocalizedStringKeys(keys)
                 graph.addLocalizedStringKeyFormats(formatSegments)
                 graph.addUnresolvedLocalizedStringKeyPrefixes(unresolvedPrefixes, modules: modules)
+                graph.addUnresolvedLocalizedStringKeyPrefixes([""], modules: unresolvedSymbolModules)
                 if hasUnresolvedSymbol {
                     graph.markUnresolvedLocalizedSymbol()
                 }
