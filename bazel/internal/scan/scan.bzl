@@ -100,7 +100,8 @@ def _scan_inputs_aspect_impl(target, ctx):
 
             if hasattr(info, "storyboards"):
                 # Periphery uses the same parser for xibs and storyboards.
-                xibs.extend(info.storyboards[0][2].to_list())
+                for bucket in info.storyboards:
+                    xibs.extend(bucket[2].to_list())
 
             if hasattr(info, "datamodels"):
                 # 'datamodels' contains both .xcdatamodel and .xcmappingmodel files.

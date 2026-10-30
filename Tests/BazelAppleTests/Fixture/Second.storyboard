@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17506" targetRuntime="iOS.CocoaTouch" useAutolayout="YES" initialViewController="second">
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17504.1"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="second-scene">
+            <objects>
+                <viewController id="second" customClass="SecondStoryboardController" customModule="ios_sources" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="second-view">
+                        <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="second-responder" sceneMemberID="firstResponder"/>
+            </objects>
+        </scene>
+    </scenes>
+</document>

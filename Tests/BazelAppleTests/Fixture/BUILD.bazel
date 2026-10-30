@@ -1,6 +1,17 @@
 load("@rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")
 load("@rules_swift//swift:swift.bzl", "swift_library")
+
+apple_resource_bundle(
+    name = "first_storyboard_resources",
+    resources = ["First.storyboard"],
+)
+
+apple_resource_bundle(
+    name = "second_storyboard_resources",
+    resources = ["Second.storyboard"],
+)
 
 swift_library(
     name = "private_helper",
@@ -26,6 +37,10 @@ macos_application(
 swift_library(
     name = "ios_sources",
     srcs = glob(["IOS/*.swift"]),
+    data = [
+        ":first_storyboard_resources",
+        ":second_storyboard_resources",
+    ],
 )
 
 ios_application(
