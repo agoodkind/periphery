@@ -35,12 +35,12 @@
             XCTAssertTrue(appOutput.contains("Dynamic value"), appOutput)
             let output = try scan(project)
             XCTAssertTrue(output.contains("Periphery cannot report unused String Catalog keys."), output)
-            XCTAssertFalse(output.contains("Unused localized string 'dynamic.used'"), output)
-            XCTAssertFalse(output.contains("Unused localized string 'owner.unused'"), output)
-            XCTAssertFalse(output.contains("Unused localized string 'other.unused'"), output)
-            XCTAssertFalse(output.contains("Unused localized string 'main.unused'"), output)
             let quietOutput = try scan(project, quiet: true)
             XCTAssertTrue(quietOutput.contains("Periphery cannot report unused String Catalog keys."), quietOutput)
+            for key in ["dynamic.used", "owner.unused", "other.unused", "main.unused", "local.used", "local.unused"] {
+                XCTAssertFalse(output.contains("Unused localized string '\(key)'"), output)
+                XCTAssertFalse(quietOutput.contains("Unused localized string '\(key)'"), quietOutput)
+            }
         }
 
         private func makeProject() throws -> URL {

@@ -28,15 +28,17 @@ final class LocalizedStringRetainer: SourceGraphMutator {
         for declaration in graph.declarations(ofKind: .localizedString) {
             let key = declaration.name
             let owningModules = declaration.location.file.modules
-            let unresolvedPrefixes = owningModules.flatMapSet { unresolvedPrefixesByModule[$0, default: []] }
+            let mainPrefixes: Set<String> = graph.nonMainBundleCatalogs.contains(declaration.location.file.path.lexicallyNormalized())
+                ? []
+                : graph.mainBundleLocalizedStringKeyPrefixes
+            let prefixGroups = [graph.unresolvedLocalizedStringKeyPrefixes, mainPrefixes]
+                + owningModules.compactMap { unresolvedPrefixesByModule[$0] }
 
             if owningModules.isEmpty
                 || graph.hasUnresolvedLocalizedSymbol
                 || usedKeys.contains(key)
                 || keyFormats.contains(where: { Self.matches(key, $0) })
-                || graph.unresolvedLocalizedStringKeyPrefixes.contains(where: { key.hasPrefix($0) })
-                || (!graph.nonMainBundleCatalogs.contains(declaration.location.file.path.lexicallyNormalized()) && graph.mainBundleLocalizedStringKeyPrefixes.contains(where: { key.hasPrefix($0) }))
-                || unresolvedPrefixes.contains(where: { key.hasPrefix($0) })
+                || prefixGroups.lazy.joined().contains(where: { key.hasPrefix($0) })
             {
                 graph.markRetained(declaration)
             }
