@@ -224,7 +224,7 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
                     log: log
                 )
                 let output = try String(contentsOf: log, encoding: .utf8)
-                guard status == 1, output.contains("failedToParse"), output.contains(missingPath) else {
+                guard status == 1, output.contains("Could not read or parse Core Data"), output.contains(missingPath) else {
                     throw VerificationError.failed("The scan must report the missing model file \(missingPath). Log: \(log.path)")
                 }
             }

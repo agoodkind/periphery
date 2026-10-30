@@ -109,7 +109,7 @@ def _scan_inputs_aspect_impl(target, ctx):
                     for resource in bucket[2].to_list():
                         if ".xcdatamodel" in resource.path and resource.basename == "contents":
                             xcdatamodels.append(resource)
-                        elif ".xcmappingmodel" in resource.path:
+                        elif ".xcmappingmodel" in resource.path and resource.basename == "xcmapping.xml":
                             xcmappingmodels.append(resource)
 
             if hasattr(info, "strings"):

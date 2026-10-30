@@ -1,12 +1,20 @@
 import Configuration
+import Foundation
 import Logger
 import Shared
 import SourceGraph
 import SystemPackage
 
 final class XCMappingModelIndexer: Indexer {
-    enum XCMappingModelError: Error {
+    enum XCMappingModelError: Error, CustomStringConvertible {
         case failedToParse(path: FilePath, underlyingError: Error)
+
+        var description: String {
+            switch self {
+            case let .failedToParse(path, underlyingError):
+                "Could not read or parse Core Data mapping model at \(path.string): \(underlyingError.localizedDescription)"
+            }
+        }
     }
 
     private let files: Set<FilePath>
