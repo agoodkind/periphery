@@ -1,12 +1,20 @@
 import Configuration
+import Foundation
 import Logger
 import Shared
 import SourceGraph
 import SystemPackage
 
 final class XCDataModelIndexer: Indexer {
-    enum XCDataModelError: Error {
+    enum XCDataModelError: Error, CustomStringConvertible {
         case failedToParse(path: FilePath, underlyingError: Error)
+
+        var description: String {
+            switch self {
+            case let .failedToParse(path, underlyingError):
+                "Could not read or parse Core Data model at \(path.string): \(underlyingError.localizedDescription)"
+            }
+        }
     }
 
     private let files: Set<FilePath>
@@ -29,7 +37,8 @@ final class XCDataModelIndexer: Indexer {
 
             let elapsed = try Benchmark.measure {
                 do {
-                    let refs = try XCDataModelParser(path: path)
+                    let input = try ModelInput(path: path, kind: .data)
+                    let refs = try XCDataModelParser(input: input)
                         .parse()
                     self.graph.withLock { graph in
                         refs.forEach { graph.add($0) }
