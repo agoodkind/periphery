@@ -11,7 +11,7 @@ final class GeneratedLocalizationScanTest: XCTestCase {
                 .resolvingSymlinksInPath()
             let fixtureURL = URL(fileURLWithPath: ProjectRootPath.appending("Tests/XcodeTests/GeneratedSymbolsProject").string)
             try fileManager.copyItem(at: fixtureURL, to: temporaryURL)
-            defer { try? fileManager.removeItem(at: temporaryURL) }
+            addTeardownBlock { try fileManager.removeItem(at: temporaryURL) }
 
             let derivedDataURL = temporaryURL.appendingPathComponent("DerivedData")
             let build = try run(
@@ -30,7 +30,7 @@ final class GeneratedLocalizationScanTest: XCTestCase {
             let executableURL = testBundle.bundleURL.deletingLastPathComponent().appendingPathComponent("periphery")
             let scanArguments = [
                 "scan", "--disable-update-check", "--project-root", temporaryURL.path,
-                "--project", "GeneratedSymbolsProject.xcodeproj", "--schemes", "Client", "--skip-build",
+                "--project", "GeneratedSymbolsProject.xcodeproj", "--schemes", "Client", "--skip-build", "--skip-schemes-validation",
                 "--index-store-path", derivedDataURL.appendingPathComponent("Index.noindex/DataStore").path,
             ]
             let initial = try run(executable: executableURL, arguments: scanArguments)
@@ -61,7 +61,7 @@ final class GeneratedLocalizationScanTest: XCTestCase {
                 .resolvingSymlinksInPath()
             let fixtureURL = URL(fileURLWithPath: SwiftUIProjectPath.string).deletingLastPathComponent()
             try fileManager.copyItem(at: fixtureURL, to: temporaryURL)
-            defer { try? fileManager.removeItem(at: temporaryURL) }
+            addTeardownBlock { try fileManager.removeItem(at: temporaryURL) }
 
             let sourceURL = temporaryURL.appendingPathComponent("SwiftUIProject/ContentView.swift")
             let source = """
@@ -111,7 +111,7 @@ final class GeneratedLocalizationScanTest: XCTestCase {
             let executableURL = testBundle.bundleURL.deletingLastPathComponent().appendingPathComponent("periphery")
             let scanArguments = [
                 "scan", "--disable-update-check", "--project-root", temporaryURL.path,
-                "--project", "SwiftUIProject.xcodeproj", "--schemes", "SwiftUIProject", "--skip-build",
+                "--project", "SwiftUIProject.xcodeproj", "--schemes", "SwiftUIProject", "--skip-build", "--skip-schemes-validation",
                 "--index-store-path", derivedDataURL.appendingPathComponent("Index.noindex/DataStore").path,
             ]
             let scan = try run(executable: executableURL, arguments: scanArguments)
