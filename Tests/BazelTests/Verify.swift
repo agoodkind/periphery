@@ -17,6 +17,7 @@ struct Fixture {
     let setupTag: String?
     let targetedQuery: String?
     let targetedNames: [String]
+    let testMissingModelFiles: Bool
 }
 
 enum VerificationError: Error, CustomStringConvertible {
@@ -106,7 +107,82 @@ func verifySetup(_ fixtureSpec: Fixture, fixture: URL, tag: String, responses: S
     }
 }
 
-func verify(_ fixtureSpec: Fixture, repository: URL) throws {
+func verifyModelFiles(fixture: URL, temporary: URL) throws {
+    let manager = FileManager.default
+    for (kind, path) in [
+        ("xcdatamodels", "Missing.xcdatamodeld/Missing.xcdatamodel/contents"),
+        ("xcmappingmodels", "Missing.xcmappingmodel/xcmapping.xml"),
+    ] {
+        let missingPath = temporary.appendingPathComponent(path).path
+        let config: [String: [String]] = [
+            "indexstores": [], "plists": [], "xibs": [],
+            "xcdatamodels": kind == "xcdatamodels" ? [missingPath] : [],
+            "xcmappingmodels": kind == "xcmappingmodels" ? [missingPath] : [],
+            "test_targets": [],
+        ]
+        let configPath = temporary.appendingPathComponent("\(kind).json")
+        try JSONSerialization.data(withJSONObject: config).write(to: configPath)
+        let log = temporary.appendingPathComponent("\(kind).log")
+        guard manager.createFile(atPath: log.path, contents: nil) else {
+            throw VerificationError.failed("Could not create \(log.path)")
+        }
+
+        let status = try run(
+            ["run", "@periphery", "--", "scan", "--generic-project-config", configPath.path, "--disable-update-check"],
+            in: fixture,
+            log: log
+        )
+        let output = try String(contentsOf: log, encoding: .utf8)
+        guard status == 1, output.contains("Could not read or parse Core Data"), output.contains(missingPath) else {
+            throw VerificationError.failed("The scan must report the missing model file \(missingPath). Log: \(log.path)")
+        }
+    }
+    report("The scan reported both missing model files.")
+
+    let uppercaseModel = temporary.appendingPathComponent("First.XCDATAMODELD")
+    let uppercaseMapping = temporary.appendingPathComponent("ModelMapping.XCMAPPINGMODEL")
+    try manager.copyItem(at: fixture.appendingPathComponent("First.xcdatamodeld"), to: uppercaseModel)
+    try manager.moveItem(
+        at: uppercaseModel.appendingPathComponent("First.xcdatamodel"),
+        to: uppercaseModel.appendingPathComponent("First.XCDATAMODEL")
+    )
+    try manager.copyItem(at: fixture.appendingPathComponent("ModelMapping.xcmappingmodel"), to: uppercaseMapping)
+
+    let projectConfig = fixture.appendingPathComponent("bazel-bin/external/periphery++generated+periphery_generated/project_config.json")
+    var uppercaseConfig = try JSONDecoder().decode([String: [String]].self, from: Data(contentsOf: projectConfig))
+    for (kind, modelPath, mappingPath) in [
+        ("directories", uppercaseModel, uppercaseMapping),
+        ("files", uppercaseModel.appendingPathComponent("First.XCDATAMODEL/contents"), uppercaseMapping.appendingPathComponent("xcmapping.xml")),
+    ] {
+        uppercaseConfig["xcdatamodels"] = [modelPath.path]
+        uppercaseConfig["xcmappingmodels"] = [mappingPath.path]
+        let configPath = temporary.appendingPathComponent("uppercase-\(kind).json")
+        try JSONEncoder().encode(uppercaseConfig).write(to: configPath)
+        let log = temporary.appendingPathComponent("uppercase-\(kind).log")
+        guard manager.createFile(atPath: log.path, contents: nil) else {
+            throw VerificationError.failed("Could not create \(log.path)")
+        }
+
+        let results = temporary.appendingPathComponent("uppercase-\(kind)-results.json")
+        let status = try run(
+            ["run", "@periphery", "--", "scan", "--generic-project-config", configPath.path,
+             "--strict", "--format", "json", "--write-results", results.path, "--disable-update-check"],
+            in: fixture,
+            log: log
+        )
+        guard status == 1, manager.fileExists(atPath: results.path) else {
+            throw VerificationError.failed("The scan must process uppercase model \(kind). Log: \(log.path)")
+        }
+
+        let foundNames = try names(in: results)
+        guard foundNames == ["SecondTransformer"] else {
+            throw VerificationError.failed("The scan must retain uppercase model references; received \(foundNames). Log: \(log.path)")
+        }
+    }
+    report("The scan retained references from uppercase model directories and files.")
+}
+
+func verify(_ fixtureSpec: Fixture, repository: URL, cache: URL) throws {
     let manager = FileManager.default
     let temporary = manager.temporaryDirectory.appendingPathComponent("periphery-bazel-\(UUID().uuidString)")
     let fixture = temporary.appendingPathComponent("Fixture")
@@ -122,6 +198,10 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
         at: repository.appendingPathComponent(".bazelversion"),
         to: fixture.appendingPathComponent(".bazelversion")
     )
+    let cachePath = cache.path.replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+    try "build --disk_cache=\"\(cachePath)\"\n"
+        .write(to: fixture.appendingPathComponent(".bazelrc"), atomically: true, encoding: .utf8)
 
     let module = fixture.appendingPathComponent("MODULE.bazel")
     let source = try String(contentsOf: module, encoding: .utf8)
@@ -229,6 +309,10 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
             report("The app-only clean scan returned 0 without findings.")
         }
 
+        if fixtureSpec.testMissingModelFiles {
+            try verifyModelFiles(fixture: fixture, temporary: temporary)
+        }
+
         if let catalog = fixtureSpec.catalog {
             let catalogPath = fixture.appendingPathComponent(catalog)
             try "{".write(to: catalogPath, atomically: true, encoding: .utf8)
@@ -272,7 +356,8 @@ do {
             bazelQuery: nil,
             setupTag: "3.9.3-agoodkind.1",
             targetedQuery: nil,
-            targetedNames: []
+            targetedNames: [],
+            testMissingModelFiles: false
         ),
         Fixture(
             name: "the Apple applications",
@@ -284,7 +369,21 @@ do {
             bazelQuery: nil,
             setupTag: nil,
             targetedQuery: "//:app",
-            targetedNames: ["unusedEmbeddedFrameworkControl()", "unusedEmbeddedServiceControl()", "unusedGreeting()", "unusedPrivateGreeting()"]
+            targetedNames: ["unusedEmbeddedFrameworkControl()", "unusedEmbeddedServiceControl()", "unusedGreeting()", "unusedPrivateGreeting()"],
+            testMissingModelFiles: false
+        ),
+        Fixture(
+            name: "the macOS application with Core Data models",
+            source: repository.appendingPathComponent("Tests/BazelCoreDataTests/Fixture"),
+            files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Info.plist", "First.xcdatamodeld", "Second.xcdatamodeld", "ModelMapping.xcmappingmodel"],
+            unusedFiles: ["Sources/Unused.swift"],
+            expectedNames: ["unusedGreeting()"],
+            catalog: nil,
+            bazelQuery: nil,
+            setupTag: nil,
+            targetedQuery: nil,
+            targetedNames: [],
+            testMissingModelFiles: true
         ),
         Fixture(
             name: "the iOS application and its storyboard bundles",
@@ -296,12 +395,28 @@ do {
             bazelQuery: "//:ios_app",
             setupTag: nil,
             targetedQuery: nil,
-            targetedNames: []
+            targetedNames: [],
+            testMissingModelFiles: false
         ),
     ]
-    for fixture in fixtures {
-        try verify(fixture, repository: repository)
+    let manager = FileManager.default
+    let cache = manager.temporaryDirectory.appendingPathComponent("periphery-bazel-cache-\(UUID().uuidString)")
+    try manager.createDirectory(at: cache, withIntermediateDirectories: false)
+    do {
+        for fixture in fixtures {
+            let start = Date()
+            try verify(fixture, repository: repository, cache: cache)
+            report("\(fixture.name) completed in \(Int(Date().timeIntervalSince(start))) seconds.")
+        }
+    } catch let verificationError {
+        do {
+            try manager.removeItem(at: cache)
+        } catch let cleanupError {
+            throw VerificationError.failed("\(verificationError)\nCould not remove Bazel cache \(cache.path): \(cleanupError)")
+        }
+        throw verificationError
     }
+    try manager.removeItem(at: cache)
 } catch {
     FileHandle.standardError.write(Data("\(error)\n".utf8))
     exit(1)
