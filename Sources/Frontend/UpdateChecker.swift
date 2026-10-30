@@ -8,12 +8,17 @@ import Shared
 #endif
 
 final class UpdateChecker {
+    struct Release {
+        let tag: String
+        let url: URL
+    }
+
     private let logger: Logger
     private let debugLogger: ContextualLogger
     private let configuration: Configuration
     private let urlSession: URLSession
     private let latestReleaseURL: URL
-    private var latestVersion: String?
+    private var latestRelease: Release?
     private let semaphore: DispatchSemaphore
     private var error: Error?
 
@@ -51,7 +56,7 @@ final class UpdateChecker {
             }
 
             do {
-                latestVersion = try Self.releaseTag(from: response)
+                latestRelease = try release(from: response)
             } catch {
                 self.error = error
                 debugLogger.debug(error.localizedDescription)
@@ -62,7 +67,7 @@ final class UpdateChecker {
         task.resume()
     }
 
-    private static func releaseTag(from response: URLResponse?) throws -> String {
+    private func release(from response: URLResponse?) throws -> Release {
         guard let response = response as? HTTPURLResponse else {
             throw PeripheryError.updateCheckError(message: "Latest release lookup did not return an HTTP response.")
         }
@@ -70,10 +75,10 @@ final class UpdateChecker {
             throw PeripheryError.updateCheckError(message: "Latest release lookup returned HTTP \(response.statusCode).")
         }
 
-        let prefix = "/agoodkind/periphery/releases/tag/"
+        let prefix = latestReleaseURL.deletingLastPathComponent().path + "/tag/"
         guard let url = response.url,
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              components.scheme == "https", components.host == "github.com",
+              components.scheme == latestReleaseURL.scheme, components.host == latestReleaseURL.host,
               components.port == nil, components.user == nil, components.password == nil,
               components.query == nil, components.fragment == nil,
               components.percentEncodedPath.hasPrefix(prefix)
@@ -86,11 +91,13 @@ final class UpdateChecker {
             throw PeripheryError.updateCheckError(message: "Latest release lookup did not identify a valid release tag.")
         }
 
-        return tag
+        return Release(tag: tag, url: url)
     }
 
     func notifyIfAvailable() {
-        guard let latestVersion else { return }
+        guard let latestRelease else { return }
+
+        let latestVersion = latestRelease.tag
 
         debugLogger.debug("latest: \(latestVersion)")
 
@@ -101,13 +108,13 @@ final class UpdateChecker {
         let boldLatestVersion = logger.colorize(latestVersion, .bold)
         let boldLocalVersion = logger.colorize(PeripheryVersion, .bold)
         logger.info("Fork release \(boldLatestVersion) is available. The installed version is \(boldLocalVersion).")
-        logger.info("Release notes: " + logger.colorize("https://github.com/agoodkind/periphery/releases/tag/\(latestVersion)", .bold))
+        logger.info("Release notes: " + logger.colorize(latestRelease.url.absoluteString, .bold))
         let boldOption = logger.colorize("--disable-update-check", .bold)
         let boldScan = logger.colorize("scan", .bold)
         logger.info("To disable update checks pass the \(boldOption) option to the \(boldScan) command.")
     }
 
-    func wait() -> Result<String, PeripheryError> {
+    func wait() -> Result<Release, PeripheryError> {
         let waitResult = semaphore.wait(timeout: .now() + 60)
 
         if let error {
@@ -118,8 +125,8 @@ final class UpdateChecker {
             return .failure(PeripheryError.updateCheckError(message: "Timed out while checking for update."))
         }
 
-        if let latestVersion {
-            return .success(latestVersion)
+        if let latestRelease {
+            return .success(latestRelease)
         }
 
         return .failure(PeripheryError.updateCheckError(message: "Failed to determine latest version."))

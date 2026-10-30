@@ -14,7 +14,8 @@ struct CheckUpdateCommand: ParsableCommand {
         let logger = Logger(configuration: configuration)
         let checker = UpdateChecker(logger: logger, configuration: configuration)
         DispatchQueue.global().async { checker.run() }
-        let latestVersion = try checker.wait().get()
+        let latestRelease = try checker.wait().get()
+        let latestVersion = latestRelease.tag
         if PeripheryVersion == "development" {
             logger.info("This development build does not have a release version. The latest fork release is \(latestVersion).")
         } else if latestVersion.isVersion(greaterThan: PeripheryVersion) {
@@ -27,6 +28,6 @@ struct CheckUpdateCommand: ParsableCommand {
         } else {
             logger.info("The installed version is \(PeripheryVersion). The latest fork release is \(latestVersion).")
         }
-        logger.info("Release notes: https://github.com/agoodkind/periphery/releases/tag/\(latestVersion)")
+        logger.info("Release notes: \(latestRelease.url.absoluteString)")
     }
 }
