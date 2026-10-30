@@ -13,6 +13,7 @@ struct Fixture {
     let unusedFiles: [String]
     let expectedNames: [String]
     let catalog: String?
+    let setupTag: String?
 }
 
 enum VerificationError: Error, CustomStringConvertible {
@@ -29,7 +30,7 @@ func report(_ message: String) {
     FileHandle.standardOutput.write(Data("\(message)\n".utf8))
 }
 
-func run(_ arguments: [String], in directory: URL, log: URL) throws -> Int32 {
+func run(_ arguments: [String], in directory: URL, log: URL, input: String? = nil) throws -> Int32 {
     let output = try FileHandle(forWritingTo: log)
     defer { output.closeFile() }
     let process = Process()
@@ -38,7 +39,15 @@ func run(_ arguments: [String], in directory: URL, log: URL) throws -> Int32 {
     process.currentDirectoryURL = directory
     process.standardOutput = output
     process.standardError = output
+    let inputPipe = Pipe()
+    if input != nil {
+        process.standardInput = inputPipe
+    }
     try process.run()
+    if let input {
+        try inputPipe.fileHandleForWriting.write(contentsOf: Data(input.utf8))
+        try inputPipe.fileHandleForWriting.close()
+    }
     process.waitUntilExit()
     return process.terminationStatus
 }
@@ -56,6 +65,38 @@ func scan(in directory: URL, results: URL, log: URL) throws -> Int32 {
 
 func names(in results: URL) throws -> [String] {
     try JSONDecoder().decode([Finding].self, from: Data(contentsOf: results)).map(\.name).sorted()
+}
+
+func verifySetup(_ fixtureSpec: Fixture, fixture: URL, tag: String, responses: String, indicator: String, log: URL, results: URL) throws {
+    let status = try run(
+        [
+            "run", "@periphery", "--", "scan", "--setup", "--strict", "--format", "json",
+            "--disable-update-check", "--no-color", "--write-results", results.path,
+        ],
+        in: fixture,
+        log: log,
+        input: responses
+    )
+    guard status == 1, FileManager.default.fileExists(atPath: results.path) else {
+        throw VerificationError.failed("Guided setup must finish its strict scan; received exit \(status). Log: \(log.path)")
+    }
+
+    let output = try String(contentsOf: log, encoding: .utf8)
+    let foundNames = try names(in: results)
+    let requiredOutput = [
+        indicator,
+        "bazel_dep(name = \"periphery\", version = \"3.8.0\")",
+        "git_override(",
+        "module_name = \"periphery\"",
+        "remote = \"https://github.com/agoodkind/periphery.git\"",
+        "tag = \"\(tag)\"",
+        "use_repo(use_extension(\"@periphery//bazel:generated.bzl\", \"generated\"), \"periphery_generated\")",
+        "periphery scan",
+        "--bazel",
+    ]
+    guard foundNames == fixtureSpec.expectedNames, requiredOutput.allSatisfy(output.contains) else {
+        throw VerificationError.failed("Guided setup must show the fork configuration and report \(fixtureSpec.expectedNames); received \(foundNames). Log: \(log.path)")
+    }
 }
 
 func verify(_ fixtureSpec: Fixture, repository: URL) throws {
@@ -90,13 +131,50 @@ func verify(_ fixtureSpec: Fixture, repository: URL) throws {
     let cleanLog = temporary.appendingPathComponent("clean.log")
     let catalogLog = temporary.appendingPathComponent("catalog.log")
     let cleanupLog = temporary.appendingPathComponent("cleanup.log")
-    for log in [unusedLog, cleanLog, catalogLog, cleanupLog] {
+    let setupLog = temporary.appendingPathComponent("setup.log")
+    let linkedSetupLog = temporary.appendingPathComponent("linked-setup.log")
+    let directorySetupLog = temporary.appendingPathComponent("directory-setup.log")
+    for log in [unusedLog, cleanLog, catalogLog, cleanupLog, setupLog, linkedSetupLog, directorySetupLog] {
         guard manager.createFile(atPath: log.path, contents: nil) else {
             throw VerificationError.failed("Could not create \(log.path)")
         }
     }
 
     do {
+        if let tag = fixtureSpec.setupTag {
+            let setupResults = temporary.appendingPathComponent("setup.json")
+            report("Running guided setup for \(fixtureSpec.name).")
+            try verifySetup(
+                fixtureSpec, fixture: fixture, tag: tag, responses: "\(tag)\n\nn\nn\n",
+                indicator: "Detected Bazel project",
+                log: setupLog,
+                results: setupResults
+            )
+            report("Guided setup showed the fork configuration and the strict scan reported \(fixtureSpec.expectedNames).")
+
+            let xcodeFixture = repository.appendingPathComponent("Tests/XcodeTests/SwiftUIProject")
+            let linkedProject = temporary.appendingPathComponent("LinkedProject")
+            let projectLink = fixture.appendingPathComponent("bazel-project")
+            try manager.copyItem(at: xcodeFixture, to: linkedProject)
+            try manager.createSymbolicLink(at: projectLink, withDestinationURL: linkedProject)
+            try verifySetup(
+                fixtureSpec, fixture: fixture, tag: tag, responses: "2\n\(tag)\n\nn\nn\n",
+                indicator: "1 Xcode\n2 Bazel", log: linkedSetupLog,
+                results: temporary.appendingPathComponent("linked-setup.json")
+            )
+            try manager.removeItem(at: projectLink)
+
+            let projectDirectory = fixture.appendingPathComponent("Project")
+            try manager.copyItem(at: xcodeFixture, to: projectDirectory)
+            try verifySetup(
+                fixtureSpec, fixture: fixture, tag: tag, responses: "2\n\(tag)\n\nn\nn\n",
+                indicator: "1 Xcode\n2 Bazel", log: directorySetupLog,
+                results: temporary.appendingPathComponent("directory-setup.json")
+            )
+            try manager.removeItem(at: projectDirectory)
+            report("Guided setup also detected a real Xcode project through a symlink and a regular directory.")
+        }
+
         let unusedResults = temporary.appendingPathComponent("unused.json")
         report("Scanning \(fixtureSpec.name) with its unused declaration.")
         let unusedStatus = try scan(in: fixture, results: unusedResults, log: unusedLog)
@@ -159,7 +237,8 @@ do {
             files: ["MODULE.bazel", "BUILD.bazel", "Sources"],
             unusedFiles: ["Sources/Unused.swift"],
             expectedNames: ["unusedGreeting()"],
-            catalog: nil
+            catalog: nil,
+            setupTag: "3.9.3-agoodkind.1"
         ),
         Fixture(
             name: "the macOS and iOS applications",
@@ -167,7 +246,8 @@ do {
             files: ["MODULE.bazel", "BUILD.bazel", "Sources", "Private", "IOS", "Info.plist", "Info-iOS.plist", "Localizable.xcstrings"],
             unusedFiles: ["Sources/Unused.swift", "Private/Unused.swift", "IOS/Unused.swift"],
             expectedNames: ["unusedGreeting()", "unusedIOSGreeting()", "unusedPrivateGreeting()"],
-            catalog: "Localizable.xcstrings"
+            catalog: "Localizable.xcstrings",
+            setupTag: nil
         ),
     ]
     for fixture in fixtures {
