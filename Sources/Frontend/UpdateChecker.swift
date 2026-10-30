@@ -8,12 +8,17 @@ import Shared
 #endif
 
 final class UpdateChecker {
+    struct Release {
+        let tag: String
+        let url: URL
+    }
+
     private let logger: Logger
     private let debugLogger: ContextualLogger
     private let configuration: Configuration
     private let urlSession: URLSession
     private let latestReleaseURL: URL
-    private var latestVersion: String?
+    private var latestRelease: Release?
     private let semaphore: DispatchSemaphore
     private var error: Error?
 
@@ -23,7 +28,7 @@ final class UpdateChecker {
         self.configuration = configuration
         let config = URLSessionConfiguration.ephemeral
         urlSession = URLSession(configuration: config)
-        latestReleaseURL = URL(string: "https://api.github.com/repos/peripheryapp/periphery/releases/latest")!
+        latestReleaseURL = URL(string: "https://github.com/agoodkind/periphery/releases/latest")!
         semaphore = DispatchSemaphore(value: 0)
     }
 
@@ -38,9 +43,9 @@ final class UpdateChecker {
               configuration.outputFormat.supportsAuxiliaryOutput else { return }
 
         var urlRequest = URLRequest(url: latestReleaseURL)
-        urlRequest.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        urlRequest.httpMethod = "HEAD"
 
-        let task = urlSession.dataTask(with: urlRequest) { [weak self] data, _, error in
+        let task = urlSession.dataTask(with: urlRequest) { [weak self] _, response, error in
             guard let self else { return }
 
             if let error {
@@ -50,50 +55,66 @@ final class UpdateChecker {
                 return
             }
 
-            guard let jsonData = data,
-                  let jsonObject = try? JSONSerialization.jsonObject(with: jsonData, options: []) as? [AnyHashable: Any],
-                  let tagName = jsonObject["tag_name"] as? String
-            else {
-                var json = "N/A"
-
-                if let data, let decoded = String(bytes: data, encoding: .utf8) {
-                    json = decoded
-                }
-
-                let message = "Failed to identify latest release tag in: \(json)"
-                self.error = PeripheryError.updateCheckError(message: message)
-                debugLogger.debug(message)
-                semaphore.signal()
-                return
+            do {
+                latestRelease = try release(from: response)
+            } catch {
+                self.error = error
+                debugLogger.debug(error.localizedDescription)
             }
-
-            latestVersion = tagName
             semaphore.signal()
         }
 
         task.resume()
     }
 
+    private func release(from response: URLResponse?) throws -> Release {
+        guard let response = response as? HTTPURLResponse else {
+            throw PeripheryError.updateCheckError(message: "Latest release lookup did not return an HTTP response.")
+        }
+        guard response.statusCode == 200 else {
+            throw PeripheryError.updateCheckError(message: "Latest release lookup returned HTTP \(response.statusCode).")
+        }
+
+        let prefix = latestReleaseURL.deletingLastPathComponent().path + "/tag/"
+        guard let url = response.url,
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.scheme == latestReleaseURL.scheme, components.host == latestReleaseURL.host,
+              components.port == nil, components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil,
+              components.percentEncodedPath.hasPrefix(prefix)
+        else {
+            throw PeripheryError.updateCheckError(message: "Latest release lookup did not redirect to a fork release.")
+        }
+
+        let encodedTag = String(components.percentEncodedPath.dropFirst(prefix.count))
+        guard let tag = encodedTag.removingPercentEncoding, !tag.isEmpty else {
+            throw PeripheryError.updateCheckError(message: "Latest release lookup did not identify a valid release tag.")
+        }
+
+        return Release(tag: tag, url: url)
+    }
+
     func notifyIfAvailable() {
-        guard let latestVersion else { return }
+        guard let latestRelease else { return }
+
+        let latestVersion = latestRelease.tag
 
         debugLogger.debug("latest: \(latestVersion)")
 
+        guard PeripheryVersion != "development" else { return }
         guard latestVersion.isVersion(greaterThan: PeripheryVersion) else { return }
 
         logger.info(logger.colorize("\nUpdate Available!", .boldGreen))
         let boldLatestVersion = logger.colorize(latestVersion, .bold)
         let boldLocalVersion = logger.colorize(PeripheryVersion, .bold)
-        logger.info("Version \(boldLatestVersion) is now available, you are using version \(boldLocalVersion).")
-        logger.info("Release notes: " + logger.colorize("https://github.com/peripheryapp/periphery/releases/tag/\(latestVersion)", .bold))
+        logger.info("Fork release \(boldLatestVersion) is available. The installed version is \(boldLocalVersion).")
+        logger.info("Release notes: " + logger.colorize(latestRelease.url.absoluteString, .bold))
         let boldOption = logger.colorize("--disable-update-check", .bold)
         let boldScan = logger.colorize("scan", .bold)
         logger.info("To disable update checks pass the \(boldOption) option to the \(boldScan) command.")
-
-        logger.info(logger.colorize("\nIf you are enjoying Periphery, please consider becoming a sponsor.", .bold) + "\nYour support helps ensure the continued development of new features and updates to support new Swift versions.\n" + logger.colorize("https://github.com/sponsors/peripheryapp", .boldMagenta))
     }
 
-    func wait() -> Result<String, PeripheryError> {
+    func wait() -> Result<Release, PeripheryError> {
         let waitResult = semaphore.wait(timeout: .now() + 60)
 
         if let error {
@@ -104,8 +125,8 @@ final class UpdateChecker {
             return .failure(PeripheryError.updateCheckError(message: "Timed out while checking for update."))
         }
 
-        if let latestVersion {
-            return .success(latestVersion)
+        if let latestRelease {
+            return .success(latestRelease)
         }
 
         return .failure(PeripheryError.updateCheckError(message: "Failed to determine latest version."))
