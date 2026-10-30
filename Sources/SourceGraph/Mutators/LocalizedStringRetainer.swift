@@ -6,8 +6,7 @@ import Shared
 ///
 /// The mutator retains a catalog key when Swift source anywhere in the scan uses it as a static literal or as an
 /// interpolated literal with matching format specifiers.
-/// It also retains the key when a module that owns the catalog contains an unresolved key call with a matching static
-/// prefix.
+/// It also retains keys that match unresolved lookups in the selected bundle scope.
 /// It retains every key when the catalog does not have an owning module or an indexed localized symbol cannot be
 /// matched to a generating module. When the generated source is missing, it retains keys in the generating module.
 final class LocalizedStringRetainer: SourceGraphMutator {
@@ -29,13 +28,17 @@ final class LocalizedStringRetainer: SourceGraphMutator {
         for declaration in graph.declarations(ofKind: .localizedString) {
             let key = declaration.name
             let owningModules = declaration.location.file.modules
-            let unresolvedPrefixes = owningModules.flatMapSet { unresolvedPrefixesByModule[$0, default: []] }
+            let mainPrefixes: Set<String> = graph.nonMainBundleCatalogs.contains(declaration.location.file.path.lexicallyNormalized())
+                ? []
+                : graph.mainBundleLocalizedStringKeyPrefixes
+            let prefixGroups = [graph.unresolvedLocalizedStringKeyPrefixes, mainPrefixes]
+                + owningModules.compactMap { unresolvedPrefixesByModule[$0] }
 
             if owningModules.isEmpty
                 || graph.hasUnresolvedLocalizedSymbol
                 || usedKeys.contains(key)
                 || keyFormats.contains(where: { Self.matches(key, $0) })
-                || unresolvedPrefixes.contains(where: { key.hasPrefix($0) })
+                || prefixGroups.lazy.joined().contains(where: { key.hasPrefix($0) })
             {
                 graph.markRetained(declaration)
             }

@@ -70,11 +70,28 @@ extension SPMProjectDriver: ProjectDriver {
             sourceFiles: sourceFiles,
             xibPaths: xibPaths,
             xcDataModelPaths: xcDataModelPaths,
-            xcStringsPaths: xcStringsPaths
+            xcStringsPaths: xcStringsPaths,
+            nonMainBundleCatalogs: nonMainBundleCatalogs(from: description, catalogs: xcStringsPaths)
         )
     }
 
     // MARK: - Private
+
+    private func nonMainBundleCatalogs(from description: PackageDescription, catalogs: [FilePath: Set<String>]) -> Set<FilePath> {
+        var separateCatalogs = Set(catalogs.keys)
+        for target in description.targets {
+            let module = target.c99name ?? target.name
+            let targetPath = pkg.path.appending(target.path).lexicallyNormalized()
+            let resources = Set((target.resources ?? []).map { resource in
+                let path = FilePath(resource.path)
+                return (path.isAbsolute ? path : targetPath.appending(resource.path)).lexicallyNormalized()
+            })
+            for (path, modules) in catalogs where modules.contains(module) && !resources.contains(path) {
+                separateCatalogs.remove(path)
+            }
+        }
+        return separateCatalogs
+    }
 
     private func testTargetNames(from description: PackageDescription) -> Set<String> {
         description.targets.filter(\.isTestTarget).mapSet(\.name)

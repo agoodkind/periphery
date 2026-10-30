@@ -2,6 +2,7 @@ import Configuration
 import Foundation
 import Logger
 import Shared
+import SystemPackage
 
 public final class SourceGraph {
     public private(set) var allDeclarations: Set<Declaration> = []
@@ -27,6 +28,9 @@ public final class SourceGraph {
     public private(set) var usedLocalizedStringKeys: Set<String> = []
     public private(set) var localizedStringKeyFormats: Set<[String]> = []
     public private(set) var unresolvedLocalizedStringKeyPrefixesByModule: [String: Set<String>] = [:]
+    public private(set) var unresolvedLocalizedStringKeyPrefixes: Set<String> = []
+    public private(set) var mainBundleLocalizedStringKeyPrefixes: Set<String> = []
+    public private(set) var nonMainBundleCatalogs: Set<FilePath> = []
     public private(set) var hasUnresolvedLocalizedSymbol = false
 
     private var indexedModules: Set<String> = []
@@ -253,6 +257,18 @@ public final class SourceGraph {
 
     public func markUnresolvedLocalizedSymbol() {
         hasUnresolvedLocalizedSymbol = true
+    }
+
+    public func addUnresolvedLocalizedStringKeyPrefixes(_ prefixes: Set<String>) {
+        unresolvedLocalizedStringKeyPrefixes.formUnion(prefixes)
+    }
+
+    public func addMainBundleLocalizedStringKeyPrefixes(_ prefixes: Set<String>) {
+        mainBundleLocalizedStringKeyPrefixes.formUnion(prefixes)
+    }
+
+    public func addNonMainBundleCatalogs(_ paths: Set<FilePath>) {
+        nonMainBundleCatalogs.formUnion(paths)
     }
 
     func markUsed(_ declaration: Declaration) {

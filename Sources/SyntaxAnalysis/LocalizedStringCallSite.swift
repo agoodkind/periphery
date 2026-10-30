@@ -35,12 +35,20 @@ public struct LocalizedStringCallSite: Hashable {
 /// `prefix` contains the static text at the start of every possible key and is empty when the expression does not
 /// start with a string literal.
 public struct LocalizedStringUnresolvedKey: Hashable {
+    public enum BundleScope: Hashable {
+        case module
+        case main
+        case unknown
+    }
+
     public let prefix: String
+    public let bundleScope: BundleScope
     public let line: Int
     public let column: Int
 
-    public init(prefix: String, line: Int, column: Int) {
+    public init(prefix: String, bundleScope: BundleScope = .unknown, line: Int, column: Int) {
         self.prefix = prefix
+        self.bundleScope = bundleScope
         self.line = line
         self.column = column
     }
