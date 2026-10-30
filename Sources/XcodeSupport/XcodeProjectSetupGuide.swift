@@ -12,13 +12,14 @@ public final class XcodeProjectSetupGuide: SetupGuideHelpers, SetupGuide {
     private let xcodebuild: Xcodebuild
 
     public convenience init?(configuration: Configuration, shell: Shell, logger: Logger) {
+        let excludedDirectories = Self.bazelConvenienceSymlinks()
         let workspacePaths = FilePath
-            .glob("**/*.xcworkspace")
+            .glob("**/*.xcworkspace", excludingDirectoryPaths: excludedDirectories)
             .filter {
                 // Swift Package Manager generates a xcworkspace inside the xcodeproj that isn't useful.
                 !$0.string.contains(".xcodeproj/")
             }
-        let projectPaths = FilePath.glob("**/*.xcodeproj")
+        let projectPaths = FilePath.glob("**/*.xcodeproj", excludingDirectoryPaths: excludedDirectories)
 
         if workspacePaths.isEmpty, projectPaths.isEmpty {
             return nil
@@ -134,6 +135,26 @@ public final class XcodeProjectSetupGuide: SetupGuideHelpers, SetupGuide {
     }
 
     // MARK: - Private
+
+    private static func bazelConvenienceSymlinks() -> Set<FilePath> {
+        let root = FilePath.current.lexicallyNormalized()
+        guard root.appending("MODULE.bazel").exists || root.appending("WORKSPACE").exists else { return [] }
+
+        var names = ["bazel-bin", "bazel-out", "bazel-testlogs"]
+        if let workspaceName = root.lastComponent?.string {
+            names.append("bazel-\(workspaceName)")
+        }
+
+        return names.compactMapSet { name in
+            let path = root.appending(name)
+            guard let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: path.string) else { return nil }
+
+            let target = FilePath.makeAbsolute(destination, relativeTo: root).lexicallyNormalized()
+            guard target.components.contains(where: { $0.string == "execroot" }) else { return nil }
+
+            return path
+        }
+    }
 
     private func getPodSchemes(in project: XcodeProjectlike) throws -> Set<String> {
         let path = project.sourceRoot.appending("Pods/Pods.xcodeproj")

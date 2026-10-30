@@ -9,12 +9,13 @@ import Foundation
 import SystemPackage
 
 public extension FilePath {
-    static func glob(_ pattern: String) -> Set<FilePath> {
+    static func glob(_ pattern: String, excludingDirectoryPaths: Set<FilePath> = []) -> Set<FilePath> {
         let absolutePattern = FilePath(pattern).isRelative ? "\(FilePath.current.string)/\(pattern)" : pattern
 
         return Glob(
             pattern: absolutePattern,
-            excludedDirectories: [".build", "node_modules", ".gems", "gems", ".swiftpm"]
+            excludedDirectories: [".build", "node_modules", ".gems", "gems", ".swiftpm"],
+            excludedDirectoryPaths: Set(excludingDirectoryPaths.map { $0.lexicallyNormalized().string })
         ).paths.mapSet { FilePath($0).lexicallyNormalized() }
     }
 }
@@ -26,15 +27,18 @@ public extension FilePath {
 ///    - When the pattern ends with a trailing slash, only directories are matched.
 private final class Glob {
     private let excludedDirectories: [String]
+    private let excludedDirectoryPaths: Set<String>
     private var isDirectoryCache: [String: Bool] = [:]
 
     fileprivate var paths: Set<String> = []
 
     init(
         pattern: String,
-        excludedDirectories: [String]
+        excludedDirectories: [String],
+        excludedDirectoryPaths: Set<String>
     ) {
         self.excludedDirectories = excludedDirectories
+        self.excludedDirectoryPaths = excludedDirectoryPaths
 
         let hasTrailingGlobstarSlash = pattern.hasSuffix("**/")
         let includeFiles = !hasTrailingGlobstarSlash
@@ -115,6 +119,10 @@ private final class Glob {
             }
 
             let subPathURL = url.appendingPathComponent(subPath, isDirectory: true)
+
+            if excludedDirectoryPaths.contains(FilePath(subPathURL.path).lexicallyNormalized().string) {
+                return []
+            }
 
             guard isDirectory(path: subPathURL.path) else {
                 return []
