@@ -1,9 +1,20 @@
 load("@rules_apple//apple:ios.bzl", "ios_application")
 load("@rules_apple//apple:macos.bzl", "macos_application", "macos_framework", "macos_xpc_service")
+load("@rules_apple//apple:resources.bzl", "apple_resource_bundle")
 load("@rules_apple//apple:tvos.bzl", "tvos_application")
 load("@rules_apple//apple:visionos.bzl", "visionos_application")
 load("@rules_apple//apple:watchos.bzl", "watchos_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
+
+apple_resource_bundle(
+    name = "first_resources",
+    resources = ["First.xib"],
+)
+
+apple_resource_bundle(
+    name = "second_resources",
+    resources = ["Second.xib"],
+)
 
 swift_library(
     name = "private_helper",
@@ -14,6 +25,10 @@ swift_library(
 swift_library(
     name = "app_sources",
     srcs = glob(["Sources/*.swift"]),
+    data = [
+        ":first_resources",
+        ":second_resources",
+    ],
     private_deps = [":private_helper"],
 )
 

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="18122" targetRuntime="MacOSX.Cocoa">
+    <dependencies><plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="18093"/></dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner" customClass="SecondController" customModule="app_sources" customModuleProvider="target"/>
+        <button id="second-button">
+            <connections>
+                <action selector="secondAction:" target="-2" id="second-action"/>
+            </connections>
+        </button>
+    </objects>
+</document>
