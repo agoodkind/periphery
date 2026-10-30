@@ -6,8 +6,7 @@ import Shared
 ///
 /// The mutator retains a catalog key when Swift source anywhere in the scan uses it as a static literal or as an
 /// interpolated literal with matching format specifiers.
-/// It also retains the key when a module that owns the catalog contains an unresolved key call with a matching static
-/// prefix.
+/// It also retains keys that match unresolved lookups in the selected bundle scope.
 /// It retains every key when the catalog does not have an owning module.
 final class LocalizedStringRetainer: SourceGraphMutator {
     /// The regular expression matches one printf-style format specifier, such as `%@`, `%lld`, `%lf`, or `%1$@`.
@@ -33,6 +32,8 @@ final class LocalizedStringRetainer: SourceGraphMutator {
             if owningModules.isEmpty
                 || usedKeys.contains(key)
                 || keyFormats.contains(where: { Self.matches(key, $0) })
+                || graph.unresolvedLocalizedStringKeyPrefixes.contains(where: { key.hasPrefix($0) })
+                || (!graph.nonMainBundleCatalogs.contains(declaration.location.file.path.lexicallyNormalized()) && graph.mainBundleLocalizedStringKeyPrefixes.contains(where: { key.hasPrefix($0) }))
                 || unresolvedPrefixes.contains(where: { key.hasPrefix($0) })
             {
                 graph.markRetained(declaration)

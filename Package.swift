@@ -139,7 +139,7 @@ var targets: [PackageDescription.Target] = [
             .target(name: "TestShared"),
             .target(name: "PeripheryKit"),
         ],
-        exclude: ["SPMProject", "SPMProjectMacOS", "SPMLocalizedStringProject"]
+        exclude: ["SPMProject", "SPMProjectMacOS", "SPMLocalizedStringProject", "CrossBundleProject"]
     ),
     .testTarget(
         name: "AccessibilityTests",

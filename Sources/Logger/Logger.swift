@@ -81,8 +81,8 @@ public struct Logger: Sendable {
         log(text, output: stdout)
     }
 
-    public func warn(_ text: String, newlinePrefix: Bool = false) {
-        guard !quiet else { return }
+    public func warn(_ text: String, newlinePrefix: Bool = false, canQuiet: Bool = true) {
+        guard !(quiet && canQuiet) else { return }
 
         if newlinePrefix {
             log("", output: stderr)
@@ -141,6 +141,10 @@ public struct ContextualLogger: Sendable {
 
     public func debug(_ text: String) {
         logger.debug("[\(context)] \(text)")
+    }
+
+    public func warn(_ text: String, canQuiet: Bool = true) {
+        logger.warn(text, canQuiet: canQuiet)
     }
 
     public func beginInterval(_ name: StaticString) -> SignpostInterval {

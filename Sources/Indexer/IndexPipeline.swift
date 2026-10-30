@@ -20,6 +20,7 @@ public struct IndexPipeline {
     }
 
     public func perform() throws -> Int {
+        graph.withLock { $0.addNonMainBundleCatalogs(plan.nonMainBundleCatalogs) }
         let scannedLOC = try SwiftIndexer(
             sourceFiles: plan.sourceFiles,
             graph: graph,
@@ -27,6 +28,10 @@ public struct IndexPipeline {
             configuration: configuration,
             swiftVersion: swiftVersion
         ).perform()
+
+        if !plan.xcStringsPaths.isEmpty, graph.withLock({ $0.unresolvedLocalizedStringKeyPrefixes.contains("") }) {
+            logger.warn("A dynamic localized string lookup has an unknown bundle and lacks a literal prefix. Periphery cannot report unused String Catalog keys. Run with --verbose to locate the lookup.", canQuiet: false)
+        }
 
         if !plan.plistPaths.isEmpty {
             try InfoPlistIndexer(

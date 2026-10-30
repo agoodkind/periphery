@@ -140,8 +140,51 @@ public final class LocalizedStringSyntaxVisitor: PeripherySyntaxVisitor {
 
         let location = sourceLocationBuilder.location(at: node.positionAfterSkippingLeadingTrivia)
         unresolvedKeys.append(
-            LocalizedStringUnresolvedKey(prefix: literalPrefix(of: keyExpression), line: location.line, column: location.column)
+            LocalizedStringUnresolvedKey(prefix: literalPrefix(of: keyExpression), bundleScope: bundleScope(node), line: location.line, column: location.column)
         )
+    }
+
+    private func bundleScope(_ node: FunctionCallExprSyntax) -> LocalizedStringUnresolvedKey.BundleScope {
+        if let member = node.calledExpression.as(MemberAccessExprSyntax.self),
+           member.declName.baseName.text == "localizedString"
+        {
+            return bundleScope(member.base)
+        }
+
+        if let bundle = node.arguments.first(where: { $0.label?.text == "bundle" }) {
+            return bundleScope(bundle.expression)
+        }
+        if node.calledExpression.trimmedDescription == "NSLocalizedString" {
+            return .main
+        }
+
+        var parent = node.parent
+        while let current = parent {
+            if let call = current.as(FunctionCallExprSyntax.self) {
+                guard call.calledExpression.trimmedDescription == "Text" else { return .unknown }
+                guard let bundle = call.arguments.first(where: { $0.label?.text == "bundle" }) else { return .main }
+
+                return bundleScope(bundle.expression)
+            }
+            if current.is(CodeBlockItemSyntax.self) || current.is(VariableDeclSyntax.self) {
+                return .unknown
+            }
+            parent = current.parent
+        }
+        return .unknown
+    }
+
+    private func bundleScope(_ expression: ExprSyntax?) -> LocalizedStringUnresolvedKey.BundleScope {
+        if expression?.is(NilLiteralExprSyntax.self) == true { return .main }
+        guard let member = expression?.as(MemberAccessExprSyntax.self),
+              member.base == nil || member.base?.trimmedDescription == "Bundle"
+        else { return .unknown }
+
+        switch member.declName.baseName.text {
+        case "module": return .module
+        case "main": return .main
+        default: return .unknown
+        }
     }
 
     /// The function returns the key argument of `NSLocalizedString(_:)`, `LocalizedStringKey(_:)`,
