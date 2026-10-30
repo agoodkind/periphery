@@ -32,19 +32,25 @@ final class SwiftIndexer: Indexer {
     private let logger: ContextualLogger
     private let configuration: Configuration
     private let swiftVersion: SwiftVersion
+    private let generatedStringSymbolUsrs: Set<String>
+    private let generatedStringSymbolModules: [String: Set<String>]
 
     required init(
         sourceFiles: [SourceFile: [IndexUnit]],
         graph: SourceGraphMutex,
         logger: ContextualLogger,
         configuration: Configuration,
-        swiftVersion: SwiftVersion
+        swiftVersion: SwiftVersion,
+        generatedStringSymbolUsrs: Set<String> = [],
+        generatedStringSymbolModules: [String: Set<String>] = [:]
     ) {
         self.sourceFiles = sourceFiles
         self.graph = graph
         self.logger = logger.contextualized(with: "swift")
         self.configuration = configuration
         self.swiftVersion = swiftVersion
+        self.generatedStringSymbolUsrs = generatedStringSymbolUsrs
+        self.generatedStringSymbolModules = generatedStringSymbolModules
         super.init(configuration: configuration)
     }
 
@@ -57,7 +63,9 @@ final class SwiftIndexer: Indexer {
                 graph: graph,
                 logger: logger,
                 configuration: configuration,
-                swiftVersion: swiftVersion
+                swiftVersion: swiftVersion,
+                generatedStringSymbolUsrs: generatedStringSymbolUsrs,
+                generatedStringSymbolModules: generatedStringSymbolModules
             )
         }
 
@@ -102,6 +110,7 @@ final class SwiftIndexer: Indexer {
     }
 
     private final class Job {
+        private static let localizedStringResourceUsrPrefix = "s:10Foundation23LocalizedStringResourceV"
         let sourceFile: SourceFile
         private(set) var scannedLOC: Int = 0
 
@@ -111,6 +120,8 @@ final class SwiftIndexer: Indexer {
         private let configuration: Configuration
         private var retainAllDeclarations: Bool
         private let swiftVersion: SwiftVersion
+        private let generatedStringSymbolUsrs: Set<String>
+        private let generatedStringSymbolModules: [String: Set<String>]
 
         required init(
             sourceFile: SourceFile,
@@ -119,7 +130,9 @@ final class SwiftIndexer: Indexer {
             graph: SourceGraphMutex,
             logger: ContextualLogger,
             configuration: Configuration,
-            swiftVersion: SwiftVersion
+            swiftVersion: SwiftVersion,
+            generatedStringSymbolUsrs: Set<String>,
+            generatedStringSymbolModules: [String: Set<String>]
         ) {
             self.sourceFile = sourceFile
             self.units = units
@@ -128,6 +141,8 @@ final class SwiftIndexer: Indexer {
             self.logger = logger
             self.configuration = configuration
             self.swiftVersion = swiftVersion
+            self.generatedStringSymbolUsrs = generatedStringSymbolUsrs
+            self.generatedStringSymbolModules = generatedStringSymbolModules
         }
 
         // swiftlint:disable nesting
@@ -214,6 +229,14 @@ final class SwiftIndexer: Indexer {
                         {
                             let position = LocalizedStringCalleePosition(line: location.line, column: location.column)
                             self.calleeUsrsByPosition[position, default: []].insert(usr)
+                        }
+
+                        if collectCalleeUsrs, occurrence.roles.contains(.reference),
+                           !occurrence.roles.contains(.implicit),
+                           [.staticProperty, .staticMethod].contains(occurrence.symbol.kind),
+                           usr.hasPrefix(Self.localizedStringResourceUsrPrefix)
+                        {
+                            self.referencedLocalizedStringResourceUsrs.insert(usr)
                         }
 
                         if occurrence.roles.contains(.reference) {
@@ -334,6 +357,7 @@ final class SwiftIndexer: Indexer {
         private var varParameterUsrs: Set<String> = []
         private var extensionUsrMap: [String: String] = [:]
         private var calleeUsrsByPosition: [LocalizedStringCalleePosition: Set<String>] = [:]
+        private var referencedLocalizedStringResourceUsrs: Set<String> = []
 
         private static let calleeSymbolKinds: Set<SymbolKind> = [
             .function, .instanceMethod, .classMethod, .staticMethod, .constructor, .conversionFunction,
@@ -348,6 +372,12 @@ final class SwiftIndexer: Indexer {
                 keys.formUnion(LocalizedStringCallResolver.usedKeys(for: callSite, calleeUsrs: calleeUsrs))
             }
 
+            let possibleUnresolvedSymbolUsrs = referencedLocalizedStringResourceUsrs.subtracting(generatedStringSymbolUsrs)
+            let unresolvedSymbolUsrs = graph.withLock { graph in
+                possibleUnresolvedSymbolUsrs.filter { graph.declaration(withUsr: $0) == nil }
+            }
+            let hasUnresolvedSymbol = unresolvedSymbolUsrs.contains { generatedStringSymbolModules[$0, default: []].isEmpty }
+            let unresolvedSymbolModules = unresolvedSymbolUsrs.flatMapSet { generatedStringSymbolModules[$0, default: []] }
             calleeUsrsByPosition = [:]
 
             for unresolvedKey in visitor.unresolvedKeys {
@@ -367,7 +397,7 @@ final class SwiftIndexer: Indexer {
             let globalPrefixes = Set(visitor.unresolvedKeys.filter { $0.bundleScope == .unknown || ($0.bundleScope == .module && sourceFile.modules.isEmpty) }.map(\.prefix))
             let modules = sourceFile.modules
 
-            guard !keys.isEmpty || !formatSegments.isEmpty || !unresolvedPrefixes.isEmpty || !globalPrefixes.isEmpty || !mainPrefixes.isEmpty else { return }
+            guard !keys.isEmpty || !formatSegments.isEmpty || !unresolvedPrefixes.isEmpty || !globalPrefixes.isEmpty || !mainPrefixes.isEmpty || hasUnresolvedSymbol || !unresolvedSymbolModules.isEmpty else { return }
 
             graph.withLock { graph in
                 graph.addUsedLocalizedStringKeys(keys)
@@ -375,6 +405,10 @@ final class SwiftIndexer: Indexer {
                 graph.addUnresolvedLocalizedStringKeyPrefixes(unresolvedPrefixes, modules: modules)
                 graph.addUnresolvedLocalizedStringKeyPrefixes(globalPrefixes)
                 graph.addMainBundleLocalizedStringKeyPrefixes(mainPrefixes)
+                graph.addUnresolvedLocalizedStringKeyPrefixes([""], modules: unresolvedSymbolModules)
+                if hasUnresolvedSymbol {
+                    graph.markUnresolvedLocalizedSymbol()
+                }
             }
         }
 

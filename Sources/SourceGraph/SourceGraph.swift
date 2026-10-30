@@ -31,6 +31,7 @@ public final class SourceGraph {
     public private(set) var unresolvedLocalizedStringKeyPrefixes: Set<String> = []
     public private(set) var mainBundleLocalizedStringKeyPrefixes: Set<String> = []
     public private(set) var nonMainBundleCatalogs: Set<FilePath> = []
+    public private(set) var hasUnresolvedLocalizedSymbol = false
 
     private var indexedModules: Set<String> = []
     private var unindexedExportedModules: Set<String> = []
@@ -252,6 +253,10 @@ public final class SourceGraph {
         for module in modules {
             unresolvedLocalizedStringKeyPrefixesByModule[module, default: []].formUnion(prefixes)
         }
+    }
+
+    public func markUnresolvedLocalizedSymbol() {
+        hasUnresolvedLocalizedSymbol = true
     }
 
     public func addUnresolvedLocalizedStringKeyPrefixes(_ prefixes: Set<String>) {

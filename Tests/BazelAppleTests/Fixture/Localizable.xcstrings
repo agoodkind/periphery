@@ -1,0 +1,16 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "app.used": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Hello" } }
+      }
+    },
+    "app.unused": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Unused" } }
+      }
+    }
+  },
+  "version": "1.0"
+}

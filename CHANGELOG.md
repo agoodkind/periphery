@@ -1,14 +1,31 @@
-## master
+# Changelog
 
-This section includes fixes from [tiny-earth-moon/periphery](https://github.com/tiny-earth-moon/periphery) 3.10.0, with attribution in the [README credits](README.md#credits).
+GitHub automatically generates release notes for new versions in [Releases](https://github.com/agoodkind/periphery/releases). This file requires manual updates.
 
-##### Breaking
+## Unreleased
 
-- None.
+## 3.9.3-agoodkind.1 (2026-10-29)
+
+- Discover standalone Swift protocol buffer targets during Bazel scans and retain their generated compatibility checks. The discovery work builds on an implementation by Ian Leitch.
+- Exclude the type named by an extension from platform conditional references, so an unused generated message can be reported.
+- Add a Bazel installation example for the fork and an automated scan of a Bazel consumer.
+
+## 3.9.2-agoodkind.1 (2026-10-29)
+
+- Exclude hidden paths from automatic SwiftPM resource discovery. A hidden Interface Builder file no longer makes a connected action appear used.
+
+## 3.9.1-agoodkind.1 (2026-10-29)
+
+- Retain all String Catalog keys in modules with mixed literal and runtime key expressions, and retain both literal keys in ternary expressions.
+
+## 3.9.0-agoodkind.1 (2026-10-29)
+
+This release includes fixes from [tiny-earth-moon/periphery](https://github.com/tiny-earth-moon/periphery) 3.10.0. The [README credits](README.md#credits) identify the original authors and contributors.
 
 ##### Enhancements
 
-- Report unused String Catalog (`.xcstrings`) keys with `--disable-unused-localized-string-analysis` and `--localized-string-catalog-exclude`; the default exclusions are `**/InfoPlist.xcstrings` and `**/AppShortcuts.xcstrings`.
+- Report unused String Catalog (`.xcstrings`) keys by default. Disable this analysis with `--disable-unused-localized-string-analysis` or exclude catalogs with `--localized-string-catalog-exclude`. The default exclusions are `**/InfoPlist.xcstrings` and `**/AppShortcuts.xcstrings`.
+- Retain keys in catalogs owned by the module containing an unresolved runtime key lookup. A known prefix limits retention to keys with that prefix.
 - Retain declarations marked `@available(<platform>, unavailable)` and declarations referenced only inside platform-conditional `#if` branches; disable with `--disable-platform-conditional-retention`.
 - Support Xcode 16+ synchronized folders with per-target membership exceptions.
 - Locate the SwiftPM index store with `swift build --show-bin-path` for both the `swiftbuild` and `native` build systems.
@@ -20,11 +37,39 @@ This section includes fixes from [tiny-earth-moon/periphery](https://github.com/
 - Fix infinite recursion during glob expansion of directories named `**`.
 - Retain public macros and associated types of public protocols with `--retain-public`.
 - Retain private Interface Builder members connected in undeclared `.xib` and `.storyboard` files and index Core Data models during SwiftPM scans.
-- Retain `buildBlock` of any arity and both `buildPartialBlock` methods, and stop reporting public result builders used from another module as redundant public.
+- Retain `buildBlock` of any arity and stop reporting public result builders used from another module as redundant public.
 - Retain code referenced only from previews of used SwiftUI views.
 - Report public members of non-public extensions as redundant public.
-- Report SwiftUI `@State` properties as unused when code assigns them through `_name` and never reads them.
-- Retain all String Catalog keys in modules with mixed literal and runtime key expressions, and retain both literal keys in ternary expressions.
+
+## 3.8.0-agoodkind.7 (2026-10-29)
+
+- Retain both `buildPartialBlock` methods in result builders, including when a builder contains a single item.
+
+## 3.8.0-agoodkind.6 (2026-10-28)
+
+- Recognize SwiftUI `@State` binding and backing storage reads with Xcode 27. Continue reporting properties that code assigns through `_name` and never reads.
+
+## 3.8.0-agoodkind.5 (2026-10-28)
+
+- Add Xcode 27 to continuous integration and prepare the nightly Swift toolchain for Xcode.
+
+## 3.8.0-agoodkind.4 (2026-10-25)
+
+- Use Swift to publish GitHub and Homebrew releases.
+
+## 3.8.0-agoodkind.3 (2026-10-25)
+
+- Prevent Periphery from hanging when a child command fills its standard error output.
+- Automate releases and update sponsorship links.
+
+## 3.8.0-agoodkind.2 (2026-08-30)
+
+- Publish macOS arm64 ZIP and disk image releases with a signed IndexStore library. The release workflow signs and notarizes the disk image and publishes checksums.
+- Add an installer that verifies the archive checksum before installing the executable and IndexStore library.
+
+## 3.8.0-agoodkind.1 (2026-08-15)
+
+- Start the fork from Periphery 3.8.0 and preserve free, offline use.
 
 ## 3.8.0 (2026-07-25)
 

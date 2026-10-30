@@ -2,7 +2,7 @@ name: Test
 on:
   push:
     branches:
-      - master
+      - main
   pull_request: {}
 env:
   MISE_EXPERIMENTAL: 1
@@ -13,7 +13,7 @@ env:
   cache_version: 1
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   installer:
     name: Installer

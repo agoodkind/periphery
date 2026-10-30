@@ -409,6 +409,56 @@ func testIncompletePublicationPredecessor(_ release: URL, formula: Data) throws 
     try tap.expectFormula(fixture, version: "3.9.0-agoodkind.1", digest: digest)
 }
 
+func markedCommit(_ checkout: Checkout) throws -> String {
+    try "1\n".write(to: checkout.directory.appendingPathComponent(".release-source-policy"), atomically: true, encoding: .utf8)
+    try "module(\n    name = \"periphery\",\n    version = \"3.8.0\",\n)\n".write(to: checkout.directory.appendingPathComponent("MODULE.bazel"), atomically: true, encoding: .utf8)
+    try checkout.git(["add", ".release-source-policy", "MODULE.bazel"])
+    return try checkout.commit("Merge pull request 401")
+}
+
+func testMarkedPredecessor(_ release: URL, complete: Bool) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    let legacy = "3.8.0-agoodkind.1"
+    let marked = "3.9.0-agoodkind.1"
+    try checkout.tag(legacy)
+    let markedSHA = try markedCommit(checkout)
+    try checkout.tag(marked)
+    let head = try checkout.commit("Merge pull request 402")
+    var published = [legacy]
+    var entries = [entry(markedSHA, 401, ["release:minor"]), entry(head, 402, ["release:patch"])]
+    var expected = "3.10.0-agoodkind.1"
+    if complete {
+        published.append(marked)
+        entries = [entry(head, 402, ["release:patch"])]
+        expected = "3.9.1-agoodkind.1"
+    }
+    let result = try fixture.prepare(checkout, published: published, labels: entries)
+    try expectAllocation(result, checkout, version: expected, at: head)
+}
+
+func testMarkedTaggedRetry(_ release: URL) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    let legacy = "3.8.0-agoodkind.1"
+    let marked = "3.9.0-agoodkind.1"
+    try checkout.tag(legacy)
+    let source = try markedCommit(checkout)
+    try checkout.tag(marked)
+    let retry = try fixture.retryCheckout("marked-retry", at: source)
+    let result = try fixture.prepare(retry, published: [legacy])
+    try expect(result.status == 0, "the marked tag retry failed:\n\(result.output)")
+    try expect(result.values["version"] == marked, "the marked retry must reuse its existing tag")
+    try expect(result.values["version_source"] == "incomplete-publication", "the marked retry must report incomplete publication")
+    let variables = ["VERSION": marked, "GITHUB_REPOSITORY": publishedRepository, "SOURCE_SHA": source]
+    try run(release.path, ["source-archive"], at: retry.directory, environment: variables)
+    let archive = retry.directory.appendingPathComponent("release/periphery-\(marked)-source.tar.gz")
+    let initial = try Data(contentsOf: archive)
+    try run(release.path, ["source-archive"], at: retry.directory, environment: variables)
+    try expect(try Data(contentsOf: archive) == initial, "marked retries must recreate the same source archive")
+    try expect(try retry.remoteRefs("refs/tags/\(marked)")["refs/tags/\(marked)"] == source, "retry must preserve the tagged commit")
+}
+
 struct HomebrewTap {
     let origin: URL
     let privateKey: String
@@ -544,6 +594,73 @@ func testPullRequestLabelCheck(_ release: URL) throws {
     }
 }
 
+func testSourceArchive(_ release: URL) throws {
+    let fixture = try Fixture(release: release)
+    let checkout = try fixture.seed()
+    let version = "3.8.1-agoodkind.1"
+    let legacy = try checkout.git(["rev-parse", "HEAD"])
+    let variables = ["VERSION": version, "GITHUB_REPOSITORY": publishedRepository, "SOURCE_SHA": legacy]
+    try run(release.path, ["source-archive"], at: checkout.directory, environment: variables)
+    try expect(!files.fileExists(atPath: checkout.directory.appendingPathComponent("release").path), "Legacy sources must not create a source archive")
+
+    try "1\n".write(to: checkout.directory.appendingPathComponent(".release-source-policy"), atomically: true, encoding: .utf8)
+    try "module(\n    name = \"periphery\",\n    version = \"3.8.0\",\n)\n".write(to: checkout.directory.appendingPathComponent("MODULE.bazel"), atomically: true, encoding: .utf8)
+    try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: checkout.directory.appendingPathComponent("scripts/install.sh").path)
+    let workflows = checkout.directory.appendingPathComponent(".github", isDirectory: true)
+    try files.createDirectory(at: workflows, withIntermediateDirectories: true)
+    try "workflow\n".write(to: workflows.appendingPathComponent("tool"), atomically: true, encoding: .utf8)
+    try checkout.git(["add", ".release-source-policy", "MODULE.bazel", "scripts/install.sh", ".github"])
+    let source = try checkout.commit("Add source archive policy")
+    try files.createDirectory(at: checkout.directory.appendingPathComponent("workflow-tools"), withIntermediateDirectories: true)
+    try "untracked\n".write(to: checkout.directory.appendingPathComponent("workflow-tools/tool"), atomically: true, encoding: .utf8)
+    let markedVariables = ["VERSION": version, "GITHUB_REPOSITORY": publishedRepository, "SOURCE_SHA": source]
+    let releaseDirectory = checkout.directory.appendingPathComponent("release", isDirectory: true)
+    try files.createDirectory(at: releaseDirectory, withIntermediateDirectories: true)
+    for name in ["periphery-\(version)-macos-arm64.zip", "periphery-\(version)-macos-arm64.dmg", "install.sh", "checksums.txt"] {
+        try Data(name.utf8).write(to: releaseDirectory.appendingPathComponent(name))
+    }
+    let missing = try execute(release.path, ["publish"], at: checkout.directory, environment: markedVariables)
+    try expect(missing.status != 0 && missing.output.contains("Release asset periphery-\(version)-source.tar.gz does not exist"), "Publication must reject a missing source archive")
+    try expect(try checkout.remoteRefs("refs/tags/\(version)").isEmpty, "Publication must reject missing assets before pushing a tag")
+    let temporary = fixture.root.appendingPathComponent("build-temporary", isDirectory: true)
+    try files.createDirectory(at: temporary, withIntermediateDirectories: true)
+    var buildVariables = markedVariables
+    buildVariables["TMPDIR"] = temporary.path + "/"
+    buildVariables["SWIFT_COMMAND"] = "swift"
+    let failedBuild = try execute(release.path, ["build"], at: checkout.directory, environment: buildVariables)
+    try expect(failedBuild.status != 0 && failedBuild.output.contains("tar failed"), "Build must report a missing source archive")
+    try expect(try files.contentsOfDirectory(atPath: temporary.path).isEmpty, "Build must remove its extraction after a failed archive extraction")
+    try files.removeItem(at: releaseDirectory.appendingPathComponent("install.sh"))
+    try run(release.path, ["source-archive"], at: checkout.directory, environment: markedVariables)
+    let archive = checkout.directory.appendingPathComponent("release/periphery-\(version)-source.tar.gz")
+    let first = try Data(contentsOf: archive)
+    try run(release.path, ["source-archive"], at: checkout.directory, environment: markedVariables)
+    try expect(try Data(contentsOf: archive) == first, "Source archive retries must produce identical bytes")
+    let extraction = fixture.root.appendingPathComponent("extraction", isDirectory: true)
+    try files.createDirectory(at: extraction, withIntermediateDirectories: true)
+    try run("tar", ["-xzf", archive.path, "-C", extraction.path], at: fixture.root)
+    let extracted = Checkout(directory: extraction.appendingPathComponent("periphery-\(version)"))
+    try expect(try extracted.contents("Sources/Frontend/Version.swift").contains("\"\(version)\""), "Source archive must stamp Version.swift")
+    try expect(try extracted.contents("scripts/install.sh").contains("VERSION=\(version)"), "Source archive must stamp install.sh")
+    try expect(try extracted.contents("MODULE.bazel").contains("name = \"periphery\""), "Source archive must preserve the module name")
+    try expect(try extracted.contents("MODULE.bazel").contains("version = \"\(version)\""), "Source archive must stamp MODULE.bazel")
+    try expect(files.isExecutableFile(atPath: extracted.directory.appendingPathComponent("scripts/install.sh").path), "Source archive must preserve executable permissions")
+    try expect(try extracted.contents(".github/tool") == "workflow\n", "Source archive must preserve tracked GitHub files")
+    try expect(!files.fileExists(atPath: extracted.directory.appendingPathComponent("workflow-tools").path), "Source archive must exclude untracked workflow tools")
+    for name in ["periphery-\(version)-macos-arm64.zip", "periphery-\(version)-macos-arm64.dmg"] {
+        try Data(name.utf8).write(to: checkout.directory.appendingPathComponent("release/\(name)"))
+    }
+    try run(release.path, ["checksums"], at: checkout.directory, environment: markedVariables)
+    let digest = SHA256.hash(data: first).map { String(format: "%02x", $0) }.joined()
+    try expect(try checkout.contents("release/checksums.txt").contains("\(digest)  periphery-\(version)-source.tar.gz"), "Checksums must include the source archive")
+
+    try "2\n".write(to: checkout.directory.appendingPathComponent(".release-source-policy"), atomically: true, encoding: .utf8)
+    try checkout.git(["add", ".release-source-policy"])
+    let unsupported = try checkout.commit("Change source archive policy")
+    let rejected = try execute(release.path, ["source-archive"], at: checkout.directory, environment: ["VERSION": version, "GITHUB_REPOSITORY": publishedRepository, "SOURCE_SHA": unsupported])
+    try expect(rejected.status != 0 && rejected.output.contains("Unsupported source archive policy 2"), "Unsupported policies must fail clearly")
+}
+
 do {
     guard CommandLine.arguments.count == 3 else {
         throw RegressionError("Usage: swift release-tests.swift RELEASE_SCRIPT FORMULA_PATH")
@@ -596,9 +713,13 @@ do {
         ("retry after tagged upload failure", { try testRetryAfterTaggedUploadFailure(release) }),
         ("retry after published release", { try testRetryAfterPublishedRelease(release) }),
         ("incomplete publication is not a predecessor", { try testIncompletePublicationPredecessor(release, formula: formula) }),
+        ("incomplete marked tag is not a predecessor", { try testMarkedPredecessor(release, complete: false) }),
+        ("complete marked tag is a predecessor", { try testMarkedPredecessor(release, complete: true) }),
+        ("marked tagged retry", { try testMarkedTaggedRetry(release) }),
         ("older reservation retry", { try testOlderReservationRetry(release, formula: formula) }),
         ("pull request label check", { try testPullRequestLabelCheck(release) }),
         ("Homebrew signed publication", { try testHomebrewSigning(release, formula: formula) }),
+        ("source archive", { try testSourceArchive(release) }),
     ]
     var failures: [String] = []
     for (name, test) in tests {

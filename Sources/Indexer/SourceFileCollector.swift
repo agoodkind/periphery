@@ -25,6 +25,19 @@ public struct SourceFileCollector {
     }
 
     public func collect() throws -> [SourceFile: [IndexUnit]] {
+        try collect(.sourceFiles)
+    }
+
+    public func collectIncludingGeneratedStringSymbols() throws -> [SourceFile: [IndexUnit]] {
+        try collect(.sourceFilesAndGeneratedStringSymbols)
+    }
+
+    private enum CollectionMode {
+        case sourceFiles
+        case sourceFilesAndGeneratedStringSymbols
+    }
+
+    private func collect(_ mode: CollectionMode) throws -> [SourceFile: [IndexUnit]] {
         let excludedTargets = excludedTestTargets.union(configuration.excludeTargets)
         let currentFilePath = FilePath.current
 
@@ -42,8 +55,9 @@ public struct SourceFileCollector {
 
                     let file = FilePath.makeAbsolute(filePath, relativeTo: currentFilePath)
 
-                    if !isExcluded(file) {
-                        guard file.exists else {
+                    let generatedSymbols = mode == .sourceFilesAndGeneratedStringSymbols && Self.isGeneratedStringSymbols(file)
+                    if !isExcluded(file) || generatedSymbols {
+                        guard file.exists || generatedSymbols else {
                             logger.debug("Source file does not exist: \(file.string)")
                             return nil
                         }
@@ -72,6 +86,10 @@ public struct SourceFileCollector {
     }
 
     // MARK: - Private
+
+    static func isGeneratedStringSymbols(_ file: FilePath) -> Bool {
+        file.string.contains("/DerivedSources/GeneratedStringSymbols_") && file.extension == "swift"
+    }
 
     private func isExcluded(_ file: FilePath) -> Bool {
         configuration.indexExcludeMatchers.anyMatch(filename: file.string)
