@@ -2,6 +2,13 @@ import Foundation
 import XCTest
 
 final class StringVersionTest: XCTestCase {
+    func testForkReleaseComparison() {
+        XCTAssertTrue("3.8.0-agoodkind.10".isVersion(greaterThan: "3.8.0-agoodkind.2"))
+        XCTAssertFalse("3.8.0-agoodkind.2".isVersion(greaterThan: "3.8.0-agoodkind.10"))
+        XCTAssertTrue("3.9.0-agoodkind.1".isVersion(greaterThan: "3.8.0-agoodkind.10"))
+        XCTAssertFalse("3.8.0-agoodkind.2".isVersion(greaterThan: "3.8.0-agoodkind.2"))
+    }
+
     func testVersion() {
         XCTAssertTrue("9.3".isVersion(lessThan: "10.0"))
         XCTAssertTrue("9.3.1".isVersion(lessThan: "10.0"))
