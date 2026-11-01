@@ -148,6 +148,15 @@ jobs:
           path: ${{ runner.temp }}/release-input.json
           overwrite: true
 
+  bcr:
+    needs: build
+    if: needs.build.outputs.release == 'true'
+    uses: ./.github/workflows/publish-bcr.yaml
+    with:
+      tag_name: ${{ needs.build.outputs.version }}
+    secrets:
+      BCR_PUBLISH_TOKEN: ${{ secrets.BCR_PUBLISH_TOKEN }}
+
   homebrew:
     needs: build
     if: needs.build.outputs.release == 'true'

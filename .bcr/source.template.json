@@ -1,0 +1,5 @@
+{
+    "url": "https://github.com/{OWNER}/{REPO}/releases/download/{TAG}/periphery-{VERSION}-source.tar.gz",
+    "integrity": "",
+    "strip_prefix": "periphery-{VERSION}"
+}

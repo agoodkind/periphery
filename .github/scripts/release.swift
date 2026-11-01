@@ -732,6 +732,10 @@ struct ReleaseContext {
             let input = temporary.appendingPathComponent(UUID().uuidString)
             try run("git", ["show", "\(source):\(path)"], outputMode: .file(input))
             try replace(pattern, with: replacement, in: input)
+            if path == "MODULE.bazel" {
+                try replace(#"^    name = "periphery",$"#,
+                            with: "    name = \"agoodkind-periphery\",\n    repo_name = \"periphery\",", in: input)
+            }
             let hash = try run("git", ["hash-object", "-w", input.path], outputMode: .capture)
             try run("git", ["update-index", "--add", "--cacheinfo", "\(mode),\(hash),\(path)"], extraEnvironment: indexEnvironment)
         }
