@@ -27,21 +27,23 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    container: swift:6.3
     permissions:
       contents: read
     outputs:
-      published: ${{ steps.registry.outputs.published }}
+      skip: ${{ steps.registry.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check registry publication
+      - name: Check registry publication and open pull requests
         id: registry
         env:
           VERSION: ${{ inputs.tag_name }}
-        run: node .github/scripts/check-bcr.mjs
+          GH_TOKEN: ${{ secrets.BCR_PUBLISH_TOKEN }}
+        run: swift .github/scripts/check-bcr.swift
 
   publish:
     needs: check
-    if: needs.check.outputs.published != 'true'
+    if: needs.check.outputs.skip == 'false'
     uses: bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@57db764c57317f6f68e57f7708a350a160b1af8d
     with:
       tag_name: ${{ inputs.tag_name }}
