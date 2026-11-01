@@ -1,0 +1,41 @@
+name: Publish agoodkind/periphery to Bazel Central Registry
+
+on:
+  workflow_call:
+    inputs:
+      tag_name:
+        description: Published agoodkind/periphery release tag
+        required: true
+        type: string
+    secrets:
+      BCR_PUBLISH_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Published agoodkind/periphery release tag
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bcr-${{ inputs.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    uses: bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@57db764c57317f6f68e57f7708a350a160b1af8d
+    with:
+      tag_name: ${{ inputs.tag_name }}
+      tag_prefix: ""
+      templates_ref: ${{ github.sha }}
+      registry_fork: agoodkind/bazel-central-registry
+      attest: false
+      draft: false
+      download_default_release_artifacts: false
+      author_name: Alexander Goodkind
+      author_email: alex@goodkind.io
+    secrets:
+      publish_token: ${{ secrets.BCR_PUBLISH_TOKEN }}
