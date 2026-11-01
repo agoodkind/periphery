@@ -7,6 +7,7 @@
 
 import CryptoKit
 import Foundation
+import Network
 
 struct RegressionError: Error, CustomStringConvertible {
     let description: String
@@ -767,6 +768,145 @@ func testSourceArchive(_ release: URL) throws {
     try expect(rejected.status != 0 && rejected.output.contains("Unsupported source archive policy 2"), "Unsupported policies must fail clearly")
 }
 
+final class RegistryServer {
+    let listener: NWListener
+    let queue = DispatchQueue(label: "registry-regression")
+    let url: URL
+
+    init(routes: [String: (Int, String)]) throws {
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        listener = try NWListener(using: parameters)
+        let ready = DispatchSemaphore(value: 0)
+        listener.stateUpdateHandler = { state in
+            switch state {
+            case .ready, .failed: ready.signal()
+            default: break
+            }
+        }
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: DispatchQueue.global())
+            Self.respond(connection, routes: routes)
+        }
+        listener.start(queue: queue)
+        guard ready.wait(timeout: .now() + 5) == .success, let port = listener.port else {
+            listener.cancel()
+            throw RegressionError("Cannot start the local registry HTTP server")
+        }
+
+        url = URL(string: "http://127.0.0.1:\(port.rawValue)/")!
+    }
+
+    deinit { listener.cancel() }
+
+    static func respond(_ connection: NWConnection, routes: [String: (Int, String)], received: Data = Data()) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, complete, error in
+            var request = received
+            request.append(data ?? Data())
+            guard let text = String(data: request, encoding: .utf8), text.contains("\r\n\r\n") else {
+                if complete || error != nil {
+                    connection.cancel()
+                } else {
+                    respond(connection, routes: routes, received: request)
+                }
+                return
+            }
+
+            let line = text.components(separatedBy: "\r\n")[0]
+            let response = routes[line] ?? (500, "Unexpected request: \(line)")
+            let authenticated = !line.hasPrefix("GET ") || text.lowercased().contains("authorization: bearer registry-test-token\r\n")
+            let status = authenticated ? response.0 : 401
+            let body = Data(response.1.utf8)
+            let header = "HTTP/1.1 \(status) Response\r\nContent-Length: \(body.count)\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n"
+            let payload = Data(header.utf8) + (line.hasPrefix("HEAD ") ? Data() : body)
+            connection.send(content: payload, completion: .contentProcessed { _ in connection.cancel() })
+        }
+    }
+}
+
+func registryPullRequest(version: String = "3.9.12-agoodkind.1", module: String = "agoodkind-periphery",
+                         owner: String = "agoodkind", fork: String = "agoodkind/bazel-central-registry",
+                         base: String = "bazelbuild/bazel-central-registry", state: String = "open",
+                         baseBranch: String = "main", title: String? = nil, branch: String? = nil) -> String
+{
+    #"{"number":11507,"state":"\#(state)","title":"\#(title ?? "\(module)@\(version)")","user":{"login":"\#(owner)"},"head":{"ref":"\#(branch ?? "\(module)-\(version)")","repo":{"full_name":"\#(fork)"}},"base":{"ref":"\#(baseBranch)","repo":{"full_name":"\#(base)"}}}"#
+}
+
+func testRegistryPreflight(_ command: URL, at workspace: URL) throws {
+    let source = "HEAD /modules/agoodkind-periphery/3.9.12-agoodkind.1/source.json HTTP/1.1"
+    let pulls = "GET /repos/bazelbuild/bazel-central-registry/pulls?state=open&per_page=100&page="
+    let exact = registryPullRequest()
+    let unrelated = [
+        registryPullRequest(version: "3.9.11-agoodkind.1"),
+        registryPullRequest(version: "3.9.12-agoodkind.10"),
+        registryPullRequest(module: "another-module"),
+        registryPullRequest(owner: "another-owner"),
+        registryPullRequest(fork: "another-owner/bazel-central-registry"),
+        registryPullRequest(base: "another-owner/bazel-central-registry"),
+        registryPullRequest(baseBranch: "another-branch"),
+        registryPullRequest(state: "closed"),
+    ].joined(separator: ",")
+    let fullPage = "[" + Array(repeating: registryPullRequest(version: "3.9.11-agoodkind.1"), count: 100).joined(separator: ",") + "]"
+    let cases: [(String, Int, [String], Bool?, String)] = [
+        ("published", 200, [], true, "already publishes"),
+        ("absent", 404, ["[]"], false, ""),
+        ("exact open pull request", 404, ["[\(exact)]"], true, "PR #11507"),
+        ("edited pull request title", 404, ["[\(registryPullRequest(title: "Review this release"))]"], true, "PR #11507"),
+        ("manual pull request branch", 404, ["[\(registryPullRequest(branch: "manual-release"))]"], true, "PR #11507"),
+        ("unrelated pull requests", 404, ["[\(unrelated)]"], false, ""),
+        ("later matching page", 404, [fullPage, "[\(exact)]"], true, "PR #11507"),
+        ("all pages absent", 404, [fullPage, "[]"], false, ""),
+        ("registry HTTP failure", 503, [], nil, "HTTP 503"),
+        ("malformed pull requests", 404, ["invalid JSON"], nil, "Cannot read registry pull requests"),
+    ]
+    for (name, status, pages, skip, message) in cases {
+        var routes = [source: (status, "")]
+        for (index, page) in pages.enumerated() {
+            routes["\(pulls)\(index + 1) HTTP/1.1"] = (200, page)
+        }
+        let server = try RegistryServer(routes: routes)
+        try checkRegistry(command, at: workspace, url: server.url, skip: skip, message: message, name: name)
+    }
+    for status in [401, 403, 429, 503] {
+        let server = try RegistryServer(routes: [source: (404, ""), "\(pulls)1 HTTP/1.1": (status, "")])
+        try checkRegistry(command, at: workspace, url: server.url, skip: nil, message: "HTTP \(status)", name: "pull request HTTP failure")
+    }
+    for version in ["3.9.12", "3.9.12-agoodkind.1/invalid", "3.9.12-agoodkind.1\n", ""] {
+        let server = try RegistryServer(routes: [:])
+        try checkRegistry(command, at: workspace, url: server.url, version: version, skip: nil,
+                          message: "Set VERSION", name: "malformed version")
+    }
+    let unavailable: URL
+    do {
+        let server = try RegistryServer(routes: [:])
+        unavailable = server.url
+    }
+    try checkRegistry(command, at: workspace, url: unavailable, skip: nil,
+                      message: "Registry preflight request failed", name: "network failure")
+}
+
+func checkRegistry(_ command: URL, at workspace: URL, url: URL, version: String = "3.9.12-agoodkind.1",
+                   skip: Bool?, message: String, name: String) throws
+{
+    let output = workspace.appendingPathComponent("registry-output-\(UUID().uuidString)")
+    try Data().write(to: output)
+    defer { try? files.removeItem(at: output) }
+    let result = try execute(command.path, [], at: workspace, environment: [
+        "VERSION": version, "GITHUB_OUTPUT": output.path, "GH_TOKEN": "registry-test-token",
+        "BCR_REGISTRY_URL": url.absoluteString, "GITHUB_API_URL": url.absoluteString,
+    ])
+    let values = try String(contentsOf: output, encoding: .utf8)
+    if let skip {
+        try expect(result.status == 0 && values == "skip=\(skip)\n", "\(name) must output skip=\(skip):\n\(result.output)")
+    } else {
+        try expect(result.status != 0 && values.isEmpty, "\(name) must fail without a publication decision:\n\(result.output)")
+    }
+    if !message.isEmpty {
+        try expect(result.output.contains(message), "\(name) must report \(message):\n\(result.output)")
+    }
+    print("PASS registry \(name)")
+}
+
 do {
     guard CommandLine.arguments.count == 3 else {
         throw RegressionError("Usage: swift release-tests.swift RELEASE_SCRIPT FORMULA_PATH")
@@ -779,6 +919,9 @@ do {
     defer { try? files.removeItem(at: workspace) }
     let release = workspace.appendingPathComponent("release")
     try run("swiftc", [releaseScript.path, "-o", release.path], at: workspace)
+    let registry = workspace.appendingPathComponent("check-bcr")
+    let registryScript = releaseScript.deletingLastPathComponent().appendingPathComponent("check-bcr.swift")
+    try run("swiftc", [registryScript.path, "-o", registry.path], at: workspace)
 
     let tests: [(String, () throws -> Void)] = [
         ("patch release", { try testAllocation(release, labelSets: [["bug", "release:patch"]], version: "3.8.1-agoodkind.1") }),
@@ -836,6 +979,7 @@ do {
         ("pull request label check", { try testPullRequestLabelCheck(release) }),
         ("Homebrew signed publication", { try testHomebrewSigning(release, formula: formula) }),
         ("source archive", { try testSourceArchive(release) }),
+        ("registry preflight", { try testRegistryPreflight(registry, at: workspace) }),
     ]
     var failures: [String] = []
     for (name, test) in tests {

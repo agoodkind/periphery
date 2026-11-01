@@ -15,13 +15,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
-  bcr:
-    name: Bazel registry publication
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: node --test .github/scripts/check-bcr.test.mjs
-
   installer:
     name: Installer
     runs-on: macos-15
@@ -174,6 +167,8 @@ jobs:
         echo "$swift_version"
         echo "SWIFT_VERSION=${swift_version}" >> "$GITHUB_ENV"
       shell: bash
+    - name: Typecheck registry preflight
+      run: swiftc -typecheck .github/scripts/check-bcr.swift
     - name: Cache resolved dependencies
       id: cache-resolved-dependencies
       uses: actions/cache@v4
