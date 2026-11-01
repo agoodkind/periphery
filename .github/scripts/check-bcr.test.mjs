@@ -4,6 +4,12 @@ import test from 'node:test';
 
 import { checkPublication } from './check-bcr.mjs';
 
+test('Reject a release version without the agoodkind suffix', async () => {
+  await assert.rejects(checkPublication('3.9.12', new URL('https://bcr.bazel.build/')), {
+    message: 'Set VERSION to an agoodkind/periphery release version',
+  });
+});
+
 for (const status of [200, 404, 503]) {
   test(`Check registry publication with HTTP ${status}`, async (context) => {
     const server = createServer((request, response) => {
