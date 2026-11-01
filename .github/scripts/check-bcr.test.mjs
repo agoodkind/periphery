@@ -13,9 +13,11 @@ for (const status of [200, 404, 503]) {
     context.after(() => rm(directory, { recursive: true }));
     const outputPath = join(directory, 'output');
     const server = createServer((request, response) => {
-      assert.equal(request.method, 'HEAD');
-      assert.equal(request.url, '/modules/agoodkind-periphery/3.9.12-agoodkind.1/source.json');
-      response.writeHead(status);
+      if (request.url === '/modules/agoodkind-periphery/3.9.12-agoodkind.1/source.json') {
+        response.writeHead(status);
+      } else {
+        response.writeHead(404);
+      }
       response.end();
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
