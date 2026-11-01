@@ -25,12 +25,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      published: ${{ steps.registry.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check registry publication
+        id: registry
+        env:
+          VERSION: ${{ inputs.tag_name }}
+        run: node .github/scripts/check-bcr.mjs
+
   publish:
+    needs: check
+    if: needs.check.outputs.published != 'true'
     uses: bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@57db764c57317f6f68e57f7708a350a160b1af8d
     with:
       tag_name: ${{ inputs.tag_name }}
       tag_prefix: ""
-      templates_ref: ${{ github.sha }}
       registry_fork: agoodkind/bazel-central-registry
       attest: false
       draft: false
